@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { env } from "@/lib/env";
+import { env } from "@/src/lib/env";
 
 const client = postgres(env.DATABASE_URL);
 

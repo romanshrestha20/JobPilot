@@ -1,4 +1,4 @@
-import { env } from "@/lib/env";
+import { env } from "@/src/lib/env";
 
 export const authConfig = {
   secret: env.BETTER_AUTH_SECRET,
