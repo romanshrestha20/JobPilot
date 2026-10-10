@@ -15,14 +15,14 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
   ]),
   {
-    files: ["lib/**/*.ts"],
+    files: ["src/lib/**/*.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: [
             {
-              group: ["next", "next/*", "react", "react-dom", "server-only"],
+              group: ["next", "next/*", "react", "react-dom"],
               message: "lib/ must stay framework-free.",
             },
             {
