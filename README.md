@@ -33,22 +33,22 @@ JobPilot aims to bring the main stages of a job search into one workflow:
 
 ## Technology Stack
 
-| Area | Technology |
-|---|---|
-| Web application | Next.js App Router |
-| Language | TypeScript |
-| Package manager | pnpm |
-| UI | Tailwind CSS and shadcn/ui |
-| Database | PostgreSQL |
-| Vector search | pgvector |
-| ORM and migrations | Prisma |
-| Validation | Zod |
-| Local AI inference | Ollama |
-| AI models | Qwen and suitable embedding models |
-| Background workflows | Inngest |
-| Unit and integration tests | Vitest |
-| End-to-end tests | Playwright |
-| Local infrastructure | Docker Compose |
+| Area                       | Technology                         |
+| -------------------------- | ---------------------------------- |
+| Web application            | Next.js App Router                 |
+| Language                   | TypeScript                         |
+| Package manager            | pnpm                               |
+| UI                         | Tailwind CSS and shadcn/ui         |
+| Database                   | PostgreSQL                         |
+| Vector search              | pgvector                           |
+| ORM and migrations         | Prisma                             |
+| Validation                 | Zod                                |
+| Local AI inference         | Ollama                             |
+| AI models                  | Qwen and suitable embedding models |
+| Background workflows       | Inngest                            |
+| Unit and integration tests | Vitest                             |
+| End-to-end tests           | Playwright                         |
+| Local infrastructure       | Docker Compose                     |
 
 The repository's actual package configuration determines which components are currently installed and operational.
 
@@ -171,18 +171,18 @@ Local AI is an optional development dependency for workflows that do not require
 
 The following commands describe the intended project workflow. Verify their availability in `package.json` before relying on them.
 
-| Command | Purpose |
-|---|---|
-| `pnpm dev` | Start the Next.js development server |
-| `pnpm worker` | Start background job processing |
-| `pnpm lint` | Run linting, if configured |
-| `pnpm typecheck` | Run TypeScript checks, if configured |
-| `pnpm test` | Run unit and integration tests |
-| `pnpm test:e2e` | Run Playwright end-to-end tests |
-| `pnpm eval` | Run AI evaluation tests |
-| `pnpm db:generate` | Generate Prisma Client |
-| `pnpm db:migrate` | Apply configured development migrations |
-| `pnpm db:seed` | Seed the development database |
+| Command            | Purpose                                 |
+| ------------------ | --------------------------------------- |
+| `pnpm dev`         | Start the Next.js development server    |
+| `pnpm worker`      | Start background job processing         |
+| `pnpm lint`        | Run linting, if configured              |
+| `pnpm typecheck`   | Run TypeScript checks, if configured    |
+| `pnpm test`        | Run unit and integration tests          |
+| `pnpm test:e2e`    | Run Playwright end-to-end tests         |
+| `pnpm eval`        | Run AI evaluation tests                 |
+| `pnpm db:generate` | Generate Prisma Client                  |
+| `pnpm db:migrate`  | Apply configured development migrations |
+| `pnpm db:seed`     | Seed the development database           |
 
 Do not assume an optional script exists until it has been checked in `package.json`.
 
@@ -361,18 +361,18 @@ See `docs/security.md` for the detailed security model.
 
 ## Documentation
 
-| Document | Purpose |
-|---|---|
-| `AGENTS.md` | Mandatory coding-agent rules |
-| `docs/architecture.md` | System architecture and boundaries |
-| `docs/module-boundaries.md` | Module ownership and dependencies |
-| `docs/database-design.md` | Database conventions and relationships |
-| `docs/api-conventions.md` | API design and error handling |
-| `docs/ai-architecture.md` | AI gateway, providers, prompts, and evaluation |
-| `docs/security.md` | Security and privacy requirements |
-| `docs/testing.md` | Testing strategy and commands |
-| `docs/deployment.md` | Deployment and operations |
-| `docs/decisions/` | Architecture decision records |
+| Document                    | Purpose                                        |
+| --------------------------- | ---------------------------------------------- |
+| `AGENTS.md`                 | Mandatory coding-agent rules                   |
+| `docs/architecture.md`      | System architecture and boundaries             |
+| `docs/module-boundaries.md` | Module ownership and dependencies              |
+| `docs/database-design.md`   | Database conventions and relationships         |
+| `docs/api-conventions.md`   | API design and error handling                  |
+| `docs/ai-architecture.md`   | AI gateway, providers, prompts, and evaluation |
+| `docs/security.md`          | Security and privacy requirements              |
+| `docs/testing.md`           | Testing strategy and commands                  |
+| `docs/deployment.md`        | Deployment and operations                      |
+| `docs/decisions/`           | Architecture decision records                  |
 
 Create missing documents when their associated architecture or functionality is implemented. Do not link to nonexistent documentation as if it were complete.
 
