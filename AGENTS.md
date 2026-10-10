@@ -101,11 +101,11 @@ Follow the stack already established in the repository:
 - pnpm for package management.
 - Tailwind CSS and shadcn/ui for the interface.
 - PostgreSQL with pgvector where semantic search requires it.
-- Prisma for database access and migrations.
+- Drizzle ORM for database access and migrations.
 - Zod for runtime validation.
 - Ollama for supported local AI inference.
 - Qwen and embedding models such as BGE where appropriate.
-- Inngest for background workflows where configured.
+- pg-boss for background workflows where configured.
 - Vitest for unit and integration testing.
 - Playwright for end-to-end testing.
 - Docker Compose for local infrastructure.
@@ -116,7 +116,7 @@ The actual package manifest and existing configuration determine which capabilit
 
 ## 6. Database Rules
 
-- Use the established Prisma schema and migration workflow.
+- Use the established Drizzle schema and migration workflow.
 - Keep schema changes explicit and reviewable.
 - Use migrations for database changes.
 - Never modify production data manually as a substitute for a migration.

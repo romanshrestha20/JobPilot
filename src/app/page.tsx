@@ -5,9 +5,7 @@ export default function Home() {
         <h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
           JobPilot
         </h1>
-        <p className="text-lg text-zinc-600 dark:text-zinc-400">
-          AI-powered job search assistant
-        </p>
+        <p className="text-lg text-zinc-600 dark:text-zinc-400">AI-powered job search assistant</p>
       </main>
     </div>
   );
