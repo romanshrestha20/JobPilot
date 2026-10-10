@@ -45,7 +45,7 @@ JobPilot aims to bring the main stages of a job search into one workflow:
 | Validation                 | Zod                                |
 | Local AI inference         | Ollama                             |
 | AI models                  | Qwen and suitable embedding models |
-| Background workflows       | Inngest                            |
+| Background workflows       | pg-boss                            |
 | Unit and integration tests | Vitest                             |
 | End-to-end tests           | Playwright                         |
 | Local infrastructure       | Docker Compose                     |
