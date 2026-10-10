@@ -41,7 +41,7 @@ JobPilot aims to bring the main stages of a job search into one workflow:
 | UI                         | Tailwind CSS and shadcn/ui         |
 | Database                   | PostgreSQL                         |
 | Vector search              | pgvector                           |
-| ORM and migrations         | Prisma                             |
+| ORM and migrations         | Drizzle ORM                        |
 | Validation                 | Zod                                |
 | Local AI inference         | Ollama                             |
 | AI models                  | Qwen and suitable embedding models |
@@ -139,7 +139,7 @@ Run the seed command if the project provides seed data:
 pnpm db:seed
 ```
 
-Review the Prisma schema and migration documentation before applying changes to any shared or production database.
+Review the Drizzle schema and migration documentation before applying changes to any shared or production database.
 
 ### 6. Start the application
 
@@ -180,7 +180,7 @@ The following commands describe the intended project workflow. Verify their avai
 | `pnpm test`        | Run unit and integration tests          |
 | `pnpm test:e2e`    | Run Playwright end-to-end tests         |
 | `pnpm eval`        | Run AI evaluation tests                 |
-| `pnpm db:generate` | Generate Prisma Client                  |
+| `pnpm db:generate` | Generate Drizzle migrations             |
 | `pnpm db:migrate`  | Apply configured development migrations |
 | `pnpm db:seed`     | Seed the development database           |
 
@@ -192,28 +192,29 @@ The following is the intended organizational model. Directory names should match
 
 ```text
 jobpilot/
-├── app/
-│   ├── (auth)/
-│   ├── (dashboard)/
-│   └── api/
-├── features/
-│   ├── candidates/
-│   ├── jobs/
-│   ├── matching/
-│   ├── documents/
-│   ├── applications/
-│   ├── interviews/
-│   ├── notifications/
-│   └── analytics/
-├── lib/
-│   ├── db.ts
-│   ├── auth.ts
-│   ├── env.ts
-│   ├── ai/
-│   ├── queue/
-│   ├── storage/
-│   └── security/
-├── components/
+├── src/
+│   ├── app/
+│   │   ├── (auth)/
+│   │   ├── (dashboard)/
+│   │   └── api/
+│   ├── features/
+│   │   ├── candidates/
+│   │   ├── jobs/
+│   │   ├── matching/
+│   │   ├── documents/
+│   │   ├── applications/
+│   │   ├── interviews/
+│   │   ├── notifications/
+│   │   └── analytics/
+│   ├── lib/
+│   │   ├── db.ts
+│   │   ├── auth.ts
+│   │   ├── env.ts
+│   │   ├── ai/
+│   │   ├── queue/
+│   │   ├── storage/
+│   │   └── security/
+│   └── components/
 ├── tests/
 │   ├── unit/
 │   ├── integration/
