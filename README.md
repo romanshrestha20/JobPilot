@@ -192,30 +192,28 @@ The following is the intended organizational model. Directory names should match
 
 ```text
 jobpilot/
-├── src/
-│   ├── app/
-│   │   ├── (auth)/
-│   │   ├── (dashboard)/
-│   │   └── api/
-│   ├── modules/
-│   │   ├── identity/
-│   │   ├── candidates/
-│   │   ├── jobs/
-│   │   ├── matching/
-│   │   ├── documents/
-│   │   ├── applications/
-│   │   ├── interviews/
-│   │   ├── notifications/
-│   │   └── analytics/
-│   ├── server/
-│   │   ├── db/
-│   │   ├── ai/
-│   │   ├── queue/
-│   │   ├── storage/
-│   │   └── security/
-│   └── components/
-├── prisma/
-│   └── schema.prisma
+├── app/
+│   ├── (auth)/
+│   ├── (dashboard)/
+│   └── api/
+├── features/
+│   ├── candidates/
+│   ├── jobs/
+│   ├── matching/
+│   ├── documents/
+│   ├── applications/
+│   ├── interviews/
+│   ├── notifications/
+│   └── analytics/
+├── lib/
+│   ├── db.ts
+│   ├── auth.ts
+│   ├── env.ts
+│   ├── ai/
+│   ├── queue/
+│   ├── storage/
+│   └── security/
+├── components/
 ├── tests/
 │   ├── unit/
 │   ├── integration/
