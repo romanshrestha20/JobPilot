@@ -70,7 +70,10 @@ export default function SignUpPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label
+              htmlFor="password"
+              className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
               Password
             </label>
             <input
@@ -86,9 +89,7 @@ export default function SignUpPage() {
             />
           </div>
 
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
           <button
             type="submit"
@@ -101,7 +102,10 @@ export default function SignUpPage() {
 
         <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
           Already have an account?{" "}
-          <Link href="/sign-in" className="font-medium text-zinc-900 underline underline-offset-4 dark:text-zinc-50">
+          <Link
+            href="/sign-in"
+            className="font-medium text-zinc-900 underline underline-offset-4 dark:text-zinc-50"
+          >
             Sign in
           </Link>
         </p>
