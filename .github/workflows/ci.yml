@@ -5,31 +5,89 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Ephemeral PostgreSQL with pgvector, reachable only from this job. The credentials
+    # below are throwaway values for that container, not real secrets.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: jobpilot
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: jobpilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jobpilot -d jobpilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # App database: receives the migrations exactly as `pnpm db:migrate` does locally.
+      DATABASE_URL: postgresql://jobpilot:ci-only-password@localhost:5432/jobpilot
+      # Integration tests: a separate database. The test helper refuses any database that
+      # is not local, does not end in `_test`, or equals DATABASE_URL.
+      TEST_DATABASE_URL: postgresql://jobpilot:ci-only-password@localhost:5432/jobpilot_test
+      # Placeholders so env validation passes during build; nothing here is used at runtime.
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: ci-only-secret-not-used-outside-this-job
+      LLM_PROVIDER: demo
+      LLM_MODEL: ci-placeholder
+      NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Reads the pnpm version from the `packageManager` field in package.json.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
-          cache: npm # caches ~/.npm between runs
+          node-version-file: .nvmrc
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci # clean, lockfile-exact install
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: pnpm typecheck
 
-      - name: Test
-        run: npm test --if-present
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Create integration-test database
+        env:
+          PGPASSWORD: ci-only-password
+        run: psql -h localhost -U jobpilot -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE jobpilot_test"
+
+      - name: Check migration history is consistent
+        run: pnpm exec drizzle-kit check
+
+      - name: Apply migrations to a fresh database
+        run: pnpm db:migrate
+
+      - name: Integration tests (PostgreSQL)
+        run: pnpm test:integration
 
       - name: Build
-        run: npm run build
+        run: pnpm build

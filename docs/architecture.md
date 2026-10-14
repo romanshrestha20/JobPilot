@@ -304,7 +304,7 @@ Vitest is configured with two suites:
 
 The integration helper refuses any `TEST_DATABASE_URL` that is not on a local host, does not end in `_test`, or equals `DATABASE_URL`.
 
-No AI-evaluation or end-to-end tests exist; the layers below describe what is still required.
+GitHub Actions (`.github/workflows/ci.yml`) installs with `pnpm install --frozen-lockfile` (pnpm version from `packageManager`, Node version from `.nvmrc`) and starts an ephemeral `pgvector/pgvector:pg17` service. It creates a separate `jobpilot_test` database, checks and applies the migrations to a fresh `jobpilot` database with `pnpm db:migrate`, then runs lint, typecheck, unit tests, integration tests, and the production build. No AI-evaluation or end-to-end tests exist; the layers below describe what is still required.
 
 Required test layers:
 - **Unit:** scoring, skill normalization, status transitions, validation, and domain rules.

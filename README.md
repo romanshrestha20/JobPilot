@@ -171,18 +171,19 @@ Local AI is an optional development dependency for workflows that do not require
 
 The following commands describe the intended project workflow. Verify their availability in `package.json` before relying on them.
 
-| Command            | Purpose                                 |
-| ------------------ | --------------------------------------- |
-| `pnpm dev`         | Start the Next.js development server    |
-| `pnpm worker`      | Start background job processing         |
-| `pnpm lint`        | Run linting, if configured              |
-| `pnpm typecheck`   | Run TypeScript checks, if configured    |
-| `pnpm test`        | Run unit and integration tests          |
-| `pnpm test:e2e`    | Run Playwright end-to-end tests         |
-| `pnpm eval`        | Run AI evaluation tests                 |
-| `pnpm db:generate` | Generate Drizzle migrations             |
-| `pnpm db:migrate`  | Apply configured development migrations |
-| `pnpm db:seed`     | Seed the development database           |
+| Command                 | Purpose                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `pnpm dev`              | Start the Next.js development server                                                    |
+| `pnpm worker`           | Start background job processing                                                         |
+| `pnpm lint`             | Run linting, if configured                                                              |
+| `pnpm typecheck`        | Run TypeScript checks, if configured                                                    |
+| `pnpm test`             | Run unit tests (no database needed)                                                     |
+| `pnpm test:integration` | Run PostgreSQL integration tests (needs `TEST_DATABASE_URL`, a local `*_test` database) |
+| `pnpm test:e2e`         | Run Playwright end-to-end tests                                                         |
+| `pnpm eval`             | Run AI evaluation tests                                                                 |
+| `pnpm db:generate`      | Generate Drizzle migrations                                                             |
+| `pnpm db:migrate`       | Apply configured development migrations                                                 |
+| `pnpm db:seed`          | Seed the development database                                                           |
 
 Do not assume an optional script exists until it has been checked in `package.json`.
 
@@ -331,6 +332,7 @@ Before submitting changes, run the relevant configured checks:
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:integration # requires a local *_test database; see .env.example
 ```
 
 For end-to-end or AI-dependent changes, also run:
