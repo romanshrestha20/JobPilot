@@ -6,7 +6,7 @@ const base =
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-label font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed";
 
 const variants = {
-  primary: "bg-primary text-primary-foreground hover:bg-accent-foreground hover:text-accent",
+  primary: "bg-primary text-primary-foreground hover:bg-primary-strong",
   secondary: "bg-secondary text-secondary-foreground hover:bg-accent",
   ghost: "text-foreground hover:bg-accent",
   destructive: "bg-destructive text-destructive-foreground hover:opacity-90",
