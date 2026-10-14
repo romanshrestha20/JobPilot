@@ -100,11 +100,20 @@ Create feature folders when work on the feature begins. A substantial module can
 Do not create empty layers or folders when a feature does not need them. Small features may use a simpler structure, provided responsibilities remain clear.
 
 Initial feature ownership:
-- `profile`: candidate profile and candidate skills.
+- `candidate-profile` (implemented in `src/features/candidate-profile/`): the candidate profile (headline, summary, location, experience, languages, work modes). Candidate skills are not implemented yet.
 - `jobs`: manually entered job descriptions and job requirements.
 - `matching`: score calculation and match result.
 - `documents`: uploaded CV metadata and extraction results.
 - `applications`: application status, notes, and deadlines.
+
+#### `candidate-profile` module
+
+- `schema.ts`: the `candidate_profile` table. `user_id` is `NOT NULL`, `UNIQUE`, and references `user.id` with `ON DELETE CASCADE`. Timestamps are `timestamptz`.
+- `validation.ts`: Zod input schema (strict: `id`, `userId`, and unknown keys are rejected) and the `CandidateProfileDto`, which omits `id` and `userId`.
+- `repository.ts`: Drizzle persistence behind the `ProfileRepository` port. Every operation is keyed by the owner's user id; there is no lookup by profile id.
+- `service.ts`: use cases `getMyProfile(user)` and `updateMyProfile(user, input)`. The owner always comes from the authenticated session user, never from input.
+- `actions.ts`, `form.ts`, `ui/profile-form.tsx`: the Server Action and form behind `/profile`. The action calls `requireUser()` itself, so protection does not depend on `src/proxy.ts`.
+- `index.ts`: server-only composition root and public exports.
 
 ### Shared infrastructure: `src/lib/`
 
@@ -117,6 +126,7 @@ Existing shared files include:
 - `src/lib/api-auth.ts`: `withUser` wrapper for route handlers (401 when signed out, 404 for missing or not-owned records).
 - `src/features/identity/server.ts`: `requireUser()` for Server Components and server actions (redirects to `/sign-in`).
 - `src/lib/env.ts`: environment validation.
+- `src/test/integration-db.ts`: connects to the dedicated `*_test` database, applies migrations, and creates test users for integration tests.
 
 As capabilities are implemented, shared infrastructure may be added under `src/lib/ai/`, `src/lib/storage/`, or similarly focused paths. Avoid speculative abstractions.
 
@@ -169,7 +179,7 @@ PostgreSQL is the source of truth. Drizzle defines schema and generates migratio
 | `application` | Job relationship, status, applied date, and deadline |
 | `application_note` | Notes and status history |
 
-These are planned entities, not current tables. Before implementing them, define whether jobs are always private to one user or can be shared, and make that ownership model explicit.
+Only `candidate_profile` exists as a table (migration `0002_candidate_profile`); the others are planned. Before implementing them, define whether jobs are always private to one user or can be shared, and make that ownership model explicit.
 
 ### Database rules
 
@@ -288,7 +298,13 @@ Future storage configuration should be introduced only with a storage implementa
 
 ## 13. Testing and quality
 
-Vitest is configured (`pnpm test`, `vitest.config.mts`) with unit tests for the authorization helpers. No integration, AI-evaluation, or end-to-end tests exist yet; the layers below describe what is still required.
+Vitest is configured with two suites:
+- `pnpm test` runs unit tests (`*.test.ts`) with no database or model.
+- `pnpm test:integration` runs `*.integration.test.ts` against a real PostgreSQL database named by `TEST_DATABASE_URL`. The helper refuses any database whose name does not end in `_test`, applies all migrations, and cleans up the users it creates. The candidate-profile suite covers create, read, update, cross-user denial, and the database constraints.
+
+The integration helper refuses any `TEST_DATABASE_URL` that is not on a local host, does not end in `_test`, or equals `DATABASE_URL`.
+
+No AI-evaluation or end-to-end tests exist; the layers below describe what is still required.
 
 Required test layers:
 - **Unit:** scoring, skill normalization, status transitions, validation, and domain rules.
