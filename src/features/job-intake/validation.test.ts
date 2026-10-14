@@ -99,6 +99,12 @@ describe("jobInputSchema", () => {
     expect(parse({ sourceUrl: url }).success).toBe(false);
   });
 
+  it("tells the user how to fix an invalid link", () => {
+    for (const bad of ["not a link", "example.com", "ftp://example.com"]) {
+      expect(firstError(parse({ sourceUrl: bad }), "sourceUrl")).toMatch(/starting with http/i);
+    }
+  });
+
   it.each(["id", "userId", "user_id", "createdAt", "updatedAt", "extra"])(
     "rejects a client-supplied %s",
     (key) => {

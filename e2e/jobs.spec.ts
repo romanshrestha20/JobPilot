@@ -176,4 +176,69 @@ test.describe("job intake", () => {
     await expect(page.getByText("Job deleted.")).toBeVisible();
     await expect(page.getByText("Short lived").filter({ visible: true })).toHaveCount(0);
   });
+
+  test("long unbroken values stay inside the page on desktop and mobile", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    const unbroken = "A".repeat(190);
+    await signInViaApi(page, registeredUser, origin);
+    await page.goto("/jobs/new");
+    await fillJob(page, {
+      title: unbroken,
+      company: unbroken,
+      location: unbroken,
+      url: `https://example.com/${"segment-".repeat(100)}`,
+      description: `${"unbrokenpath".repeat(60)}\n\n${"Long paragraph. ".repeat(200)}`,
+    });
+    await page.getByRole("button", { name: "Save job" }).click();
+    await expect(page.getByText("Job saved.")).toBeVisible();
+    const detailUrl = new URL(page.url()).pathname;
+
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 375, height: 812 },
+    ]) {
+      await page.setViewportSize(viewport);
+      for (const path of ["/jobs", detailUrl, "/jobs/new"]) {
+        await page.goto(path);
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        expect(
+          scrollWidth,
+          `${path} at ${viewport.width}px scrolls horizontally`,
+        ).toBeLessThanOrEqual(clientWidth);
+      }
+    }
+  });
+
+  test("renders in both themes, including the data-theme override", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    await signInViaApi(page, registeredUser, origin);
+    const background = async () =>
+      page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.goto("/jobs");
+    await expect(page.getByText("No saved jobs yet")).toBeVisible();
+    const light = await background();
+
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect.poll(background).not.toBe(light);
+
+    // A forced theme wins over the OS setting in both directions.
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+    await expect.poll(background).not.toBe(light);
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+    await expect.poll(background).toBe(light);
+  });
 });
