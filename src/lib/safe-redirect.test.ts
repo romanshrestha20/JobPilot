@@ -21,6 +21,9 @@ describe("safeNextPath", () => {
     "/\\evil.example",
     "\\\\evil.example",
     "/\\/evil.example",
+    "/.//evil.example", // dot-segment normalization would yield `//evil.example`
+    "/a/..//evil.example",
+    "/./\\/evil.example",
     "/%5Cevil.example/..", // decoded by the URL parser to a path, still same origin → checked below
     "javascript:alert(1)",
     "data:text/html,hi",

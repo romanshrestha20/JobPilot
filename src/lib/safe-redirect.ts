@@ -35,6 +35,10 @@ export function safeNextPath(value: unknown, fallback = "/"): string {
   if (parsed.origin !== PLACEHOLDER_ORIGIN) return fallback;
   if (BLOCKED_PREFIXES.some((prefix) => matchesPrefix(parsed.pathname, prefix))) return fallback;
 
+  // Dot segments are normalized away (`/.//evil.example` → `//evil.example`), which would turn the
+  // rebuilt string into a protocol-relative URL. Re-check the rebuilt value, not just the input.
+  if (parsed.pathname.startsWith("//")) return fallback;
+
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 

@@ -56,6 +56,15 @@ describe("proxy redirects", () => {
     }
   });
 
+  it("matches the auth pages by path segment, not by prefix", async () => {
+    // `/sign-instructions` must be treated as a protected page, not as the public `/sign-in`.
+    const res = await call("/sign-instructions");
+    expect(location(res)!.pathname).toBe("/sign-in");
+    expect(
+      (await call("/sign-instructions", { signedIn: true })).headers.get("location"),
+    ).toBeNull();
+  });
+
   it("does not redirect a signed-in user on protected pages", async () => {
     expect((await call("/profile", { signedIn: true })).headers.get("location")).toBeNull();
   });

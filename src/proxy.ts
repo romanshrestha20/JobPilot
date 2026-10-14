@@ -17,7 +17,7 @@ export default async function proxy(request: NextRequest) {
 
   // Handles the __Secure- cookie prefix used over HTTPS.
   const isAuthenticated = !!getSessionCookie(request);
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   // Signed-in user hitting auth pages → send home
   if (isAuthenticated && isPublic) {
