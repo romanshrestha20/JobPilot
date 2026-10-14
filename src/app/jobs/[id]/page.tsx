@@ -30,7 +30,7 @@ export default function JobPage({ params, searchParams }: Props) {
 async function JobContent({ params, searchParams }: Props) {
   const user = await requireUser();
   const { id } = await params;
-  const { saved } = await searchParams;
+  const { saved, updated } = await searchParams;
   // Scoped to the signed-in user in SQL; a missing and a foreign job are both a plain 404.
   const job = await getMyJob(user, id);
   if (!job) notFound();
@@ -41,14 +41,19 @@ async function JobContent({ params, searchParams }: Props) {
         title={job.title}
         description={[job.company, job.location].filter(Boolean).join(" · ")}
         actions={
-          <Link href="/jobs" className={buttonVariants({ variant: "secondary" })}>
-            All jobs
-          </Link>
+          <>
+            <Link href={`/jobs/${job.id}/edit`} className={buttonVariants()}>
+              Edit job
+            </Link>
+            <Link href="/jobs" className={buttonVariants({ variant: "secondary" })}>
+              All jobs
+            </Link>
+          </>
         }
       />
-      {saved === "1" && (
+      {(saved === "1" || updated === "1") && (
         <div className="mb-4">
-          <Alert variant="success">Job saved.</Alert>
+          <Alert variant="success">{updated === "1" ? "Job updated." : "Job saved."}</Alert>
         </div>
       )}
       <Card>
@@ -58,6 +63,14 @@ async function JobContent({ params, searchParams }: Props) {
             <dd>
               {job.createdAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
             </dd>
+            {job.updatedAt.getTime() - job.createdAt.getTime() > 1000 ? (
+              <>
+                <dt className="text-muted-foreground">Updated</dt>
+                <dd>
+                  {job.updatedAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
+                </dd>
+              </>
+            ) : null}
             {job.sourceUrl ? (
               <>
                 <dt className="text-muted-foreground">Original posting</dt>

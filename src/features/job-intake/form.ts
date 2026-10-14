@@ -1,4 +1,5 @@
 import type { ZodIssue } from "zod";
+import type { JobDto } from "./validation";
 
 /** String-only shape used to echo the form back after a validation error. */
 export type JobFormValues = {
@@ -20,6 +21,17 @@ export const EMPTY_JOB_FORM: JobFormValues = {
   sourceUrl: "",
   description: "",
 };
+
+/** Populates the edit form from a saved job (optional fields become empty strings). */
+export function toJobFormValues(job: JobDto): JobFormValues {
+  return {
+    title: job.title,
+    company: job.company,
+    location: job.location ?? "",
+    sourceUrl: job.sourceUrl ?? "",
+    description: job.description,
+  };
+}
 
 const text = (formData: FormData, key: string): string => {
   const value = formData.get(key);

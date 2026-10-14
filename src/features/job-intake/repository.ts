@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { jobPosting } from "./schema";
 import type { JobInput } from "./validation";
@@ -18,6 +18,8 @@ export interface JobRepository {
   /** Newest first, bounded by `limit`/`offset`. */
   listForUser(userId: string, page: { limit: number; offset: number }): Promise<JobSummaryRecord[]>;
   findForUser(userId: string, jobId: string): Promise<JobRecord | null>;
+  /** Replaces the editable fields of a job owned by `userId`; null when no such row exists. */
+  updateForUser(userId: string, jobId: string, data: JobInput): Promise<JobRecord | null>;
   /** True when a row owned by `userId` was deleted. */
   deleteForUser(userId: string, jobId: string): Promise<boolean>;
 }
@@ -62,6 +64,24 @@ export function createJobRepository(db: PostgresJsDatabase): JobRepository {
         .from(jobPosting)
         .where(and(eq(jobPosting.id, jobId), eq(jobPosting.userId, userId)))
         .limit(1);
+      return row ?? null;
+    },
+
+    async updateForUser(userId, jobId, data) {
+      // Ownership is part of the UPDATE's own WHERE clause; `userId`, `id` and `createdAt`
+      // are never in the SET list, so they cannot change.
+      const [row] = await db
+        .update(jobPosting)
+        .set({
+          title: data.title,
+          company: data.company,
+          location: data.location,
+          sourceUrl: data.sourceUrl,
+          description: data.description,
+          updatedAt: sql`now()`,
+        })
+        .where(and(eq(jobPosting.id, jobId), eq(jobPosting.userId, userId)))
+        .returning();
       return row ?? null;
     },
 

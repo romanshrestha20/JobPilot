@@ -200,3 +200,120 @@ describe("database constraints and cascade (real PostgreSQL)", () => {
     expect(await rowsFor(temp.id)).toHaveLength(0);
   });
 });
+
+describe("editing a job (real PostgreSQL)", () => {
+  const edit = {
+    title: "Edited title",
+    company: "Edited Co",
+    location: "Oulu",
+    sourceUrl: "https://example.com/edited",
+    description: "Edited description.\n\nSecond paragraph.",
+  };
+
+  async function rowById(id: string) {
+    const [row] = await db.select().from(jobPosting).where(eq(jobPosting.id, id));
+    return row;
+  }
+
+  it("lets the owner change every editable field and bumps only updated_at", async () => {
+    const job = await createJob(alice, { title: "Original" });
+    const before = await rowById(job.id);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const result = await service.updateMyJob(alice, job.id, edit);
+
+    expect(result.ok).toBe(true);
+    const after = await rowById(job.id);
+    expect(after).toMatchObject({ ...edit, userId: alice.id, id: job.id });
+    expect(after.createdAt.getTime()).toBe(before.createdAt.getTime());
+    expect(after.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+  });
+
+  it("clears optional fields when they are submitted empty", async () => {
+    const job = await createJob(alice, {
+      location: "Somewhere",
+      sourceUrl: "https://example.com/x",
+    });
+
+    await service.updateMyJob(alice, job.id, { ...input, location: "", sourceUrl: "" });
+
+    expect(await rowById(job.id)).toMatchObject({ location: null, sourceUrl: null });
+  });
+
+  it("never lets another user change a job, verified directly in the database", async () => {
+    const job = await createJob(alice, { title: "Alice's job", description: "Alice's text." });
+    const before = await rowById(job.id);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const result = await service.updateMyJob(bob, job.id, edit);
+
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+    expect(await rowById(job.id)).toEqual(before);
+  });
+
+  it("gives a non-owner the same answer for invalid input as for valid input", async () => {
+    const job = await createJob(alice);
+    const before = await rowById(job.id);
+
+    const result = await service.updateMyJob(bob, job.id, { title: "" });
+
+    expect(result).toEqual({ ok: false, reason: "not_found" });
+    expect(await rowById(job.id)).toEqual(before);
+  });
+
+  it("cannot be used to take over or reassign a job", async () => {
+    const job = await createJob(alice);
+
+    const forged = await service.updateMyJob(alice, job.id, { ...edit, userId: bob.id });
+    const forgedByBob = await service.updateMyJob(bob, job.id, { ...edit, userId: bob.id });
+
+    expect(forged.ok).toBe(false);
+    expect(forgedByBob.ok).toBe(false);
+    expect((await rowById(job.id)).userId).toBe(alice.id);
+  });
+
+  it("leaves the stored job unchanged when validation fails", async () => {
+    const job = await createJob(alice);
+    const before = await rowById(job.id);
+
+    for (const bad of [{ title: "  " }, { description: "\n\t" }, { sourceUrl: "ftp://x.test" }]) {
+      const result = await service.updateMyJob(alice, job.id, { ...edit, ...bad });
+      expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    }
+
+    expect(await rowById(job.id)).toEqual(before);
+  });
+
+  it("only touches the targeted job", async () => {
+    const target = await createJob(alice, { title: "Target" });
+    const other = await createJob(alice, { title: "Bystander" });
+    const otherBefore = await rowById(other.id);
+
+    await service.updateMyJob(alice, target.id, edit);
+
+    expect(await rowById(other.id)).toEqual(otherBefore);
+  });
+
+  it("answers missing and malformed ids as not found", async () => {
+    await expect(
+      service.updateMyJob(alice, "00000000-0000-4000-8000-000000000000", edit),
+    ).resolves.toEqual({ ok: false, reason: "not_found" });
+    await expect(service.updateMyJob(alice, "not-a-uuid", edit)).resolves.toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+  });
+
+  it("is still held to the database constraints", async () => {
+    const job = await createJob(alice);
+    await expect(
+      db.update(jobPosting).set({ title: "\n\t " }).where(eq(jobPosting.id, job.id)),
+    ).rejects.toThrow();
+    await expect(
+      db
+        .update(jobPosting)
+        .set({ sourceUrl: "javascript:alert(1)" })
+        .where(eq(jobPosting.id, job.id)),
+    ).rejects.toThrow();
+  });
+});

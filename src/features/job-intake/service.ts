@@ -6,6 +6,12 @@ export const JOBS_PAGE_SIZE = 20;
 
 export type CreateJobResult = { ok: true; job: JobDto } | { ok: false; errors: ZodError["issues"] };
 
+/** `not_found` covers a missing job, a malformed id and a job owned by someone else alike. */
+export type UpdateJobResult =
+  | { ok: true; job: JobDto }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "invalid"; errors: ZodError["issues"] };
+
 export type JobsPage = { jobs: JobSummaryDto[]; page: number; hasMore: boolean };
 
 function toDto(record: JobRecord): JobDto {
@@ -60,6 +66,22 @@ export function createJobService(repository: JobRepository) {
       if (!jobIdSchema.safeParse(id).success) return null;
       const record = await repository.findForUser(user.id, id);
       return record ? toDto(record) : null;
+    },
+
+    async updateMyJob(user: { id: string }, id: string, input: unknown): Promise<UpdateJobResult> {
+      if (!jobIdSchema.safeParse(id).success) return { ok: false, reason: "not_found" };
+
+      const parsed = jobInputSchema.safeParse(input);
+      if (!parsed.success) {
+        // A non-owner gets the same answer whatever they submit, so validation feedback can
+        // never be used to learn whether someone else's job id exists.
+        const owned = await repository.findForUser(user.id, id);
+        if (!owned) return { ok: false, reason: "not_found" };
+        return { ok: false, reason: "invalid", errors: parsed.error.issues };
+      }
+
+      const record = await repository.updateForUser(user.id, id, parsed.data);
+      return record ? { ok: true, job: toDto(record) } : { ok: false, reason: "not_found" };
     },
 
     async deleteMyJob(user: { id: string }, id: string): Promise<boolean> {

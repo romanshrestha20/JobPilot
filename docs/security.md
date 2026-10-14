@@ -45,8 +45,8 @@ One shared rule, `safeNextPath` in `src/lib/safe-redirect.ts`, used by the proxy
 
 ## Job intake data
 
-- Saved jobs (`job_posting`) are owned by one user. Every list, read and delete query puts the session user's id in the SQL `WHERE` clause; there is no lookup by job id alone. A missing job, someone else's job and a malformed id all render the same not-found page with the same HTTP status. That status is 200, not 404, because the lookup runs inside a Suspense boundary (Cache Components) after the response has started streaming; the page is not indexable and reveals nothing about which ids exist.
-- Input is validated with a strict Zod schema (unknown keys such as `id` and `userId` are rejected). The database repeats the length, non-blank and `http(s)` source-URL rules as CHECK constraints.
+- Saved jobs (`job_posting`) are owned by one user. Every list, read, update and delete query puts the session user's id in the SQL `WHERE` clause; there is no lookup by job id alone. A missing job, someone else's job and a malformed id all render the same not-found page with the same HTTP status. That status is 200, not 404, because the lookup runs inside a Suspense boundary (Cache Components) after the response has started streaming; the page is not indexable and reveals nothing about which ids exist.
+- Input is validated with a strict Zod schema (unknown keys such as `id` and `userId` are rejected). An edit is a single `UPDATE … WHERE id = ? AND user_id = ?` that never sets `id`, `user_id` or `created_at` (`updated_at` is set by the database). A non-owner gets the same not-found answer whether the submitted values are valid or not. The database repeats the length, non-blank and `http(s)` source-URL rules as CHECK constraints.
 - Job descriptions and links are untrusted. They are rendered as plain text (never as HTML), and the source link is only `http(s)`, opened with `rel="noopener noreferrer nofollow"`. The app never fetches the link.
 
 ## Deployment requirements

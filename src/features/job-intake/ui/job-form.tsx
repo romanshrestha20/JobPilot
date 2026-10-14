@@ -1,25 +1,32 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { createJobAction } from "../actions";
-import { EMPTY_JOB_FORM, type JobFormState } from "../form";
+import { createJobAction, updateJobAction } from "../actions";
+import { EMPTY_JOB_FORM, type JobFormState, type JobFormValues } from "../form";
 import { JOB_LIMITS } from "../validation";
 
-export function JobForm() {
-  const [state, formAction, pending] = useActionState<JobFormState, FormData>(createJobAction, {
-    status: "idle",
-    values: EMPTY_JOB_FORM,
-  });
+export interface JobFormProps {
+  /** Present when editing: the saved job's id and current values. Absent when adding a job. */
+  job?: { id: string; values: JobFormValues };
+}
+
+export function JobForm({ job }: JobFormProps) {
+  const [state, formAction, pending] = useActionState<JobFormState, FormData>(
+    job ? updateJobAction : createJobAction,
+    { status: "idle", values: job?.values ?? EMPTY_JOB_FORM },
+  );
   const errors = state.status === "error" ? state.fieldErrors : {};
   const values = state.values;
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      {job ? <input type="hidden" name="id" value={job.id} /> : null}
       <FormField id="title" label="Job title" error={errors.title}>
         {(control) => (
           <Input
@@ -102,9 +109,16 @@ export function JobForm() {
         )}
       </div>
 
-      <Button type="submit" loading={pending}>
-        {pending ? "Saving…" : "Save job"}
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" loading={pending}>
+          {pending ? "Saving…" : job ? "Save changes" : "Save job"}
+        </Button>
+        {job ? (
+          <Link href={`/jobs/${job.id}`} className={buttonVariants({ variant: "secondary" })}>
+            Cancel
+          </Link>
+        ) : null}
+      </div>
     </form>
   );
 }
