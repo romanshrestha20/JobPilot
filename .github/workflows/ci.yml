@@ -91,3 +91,10 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Starts its own production build on port 3100 against the guarded jobpilot_test database.
+      - name: End-to-end tests (Playwright)
+        run: pnpm test:e2e

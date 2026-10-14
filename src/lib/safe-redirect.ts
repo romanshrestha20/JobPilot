@@ -5,7 +5,6 @@ const MAX_NEXT_LENGTH = 512;
 // Never send a user back to an auth screen (redirect loop) or a raw API endpoint.
 const BLOCKED_PREFIXES = ["/sign-in", "/sign-up", "/api"];
 // ASCII control characters and DEL; browsers strip some of them, which can turn `/\t/evil.com` into `//evil.com`.
-// eslint-disable-next-line no-control-regex -- matching control characters is the purpose of this check.
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
 function matchesPrefix(pathname: string, prefix: string): boolean {
