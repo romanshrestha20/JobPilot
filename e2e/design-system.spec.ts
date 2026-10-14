@@ -356,8 +356,12 @@ test.describe("forms, feedback and controls", () => {
         "primary link-button",
       ).toBeGreaterThanOrEqual(4.5);
       expect(
-        await contrast(page.getByRole("link", { name: "All jobs" })),
-        "secondary link-button",
+        await contrast(
+          page
+            .getByRole("navigation", { name: "Breadcrumb" })
+            .getByRole("link", { name: "My jobs" }),
+        ),
+        "breadcrumb link",
       ).toBeGreaterThanOrEqual(4.5);
       expect(
         await contrast(page.getByRole("button", { name: "Update status" })),
@@ -380,6 +384,80 @@ test.describe("forms, feedback and controls", () => {
       expect(
         await contrast(page.getByText("Delete this job permanently?")),
         "confirmation text",
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
+test.describe("navigation colours", () => {
+  for (const scheme of SCHEMES) {
+    test(`sidebar, header and drawer text and controls in ${scheme}`, async ({
+      page,
+      registeredUser,
+      origin,
+    }) => {
+      await signInViaApi(page, registeredUser, origin);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto("/jobs");
+      const nav = page.getByRole("navigation", { name: "Main" });
+      await expect(nav.getByRole("link", { name: "My jobs", exact: true })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      await applyTheme(page, scheme, "media");
+
+      expect(
+        await contrast(nav.getByRole("link", { name: "My jobs", exact: true })),
+        "active item",
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        await contrast(nav.getByRole("link", { name: "Home", exact: true })),
+        "inactive item",
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        await contrast(nav.getByText("Workspace", { exact: true })),
+        "group label",
+      ).toBeGreaterThanOrEqual(4.5);
+      const aside = page.locator("aside");
+      expect(
+        await contrast(aside.getByText(registeredUser.email)),
+        "account email",
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        await contrast(aside.getByRole("button", { name: "Sign out" })),
+        "sign out",
+      ).toBeGreaterThanOrEqual(4.5);
+      const theme = page.getByLabel("Theme");
+      expect(await contrast(theme), "theme select text").toBeGreaterThanOrEqual(4.5);
+      expect(await contrast(theme, "borderTopColor"), "theme select border").toBeGreaterThanOrEqual(
+        3,
+      );
+
+      // Hover state of an inactive item, once its colour transition has settled.
+      await nav.getByRole("link", { name: "My profile", exact: true }).hover();
+      await page.waitForTimeout(400);
+      expect(
+        await contrast(nav.getByRole("link", { name: "My profile", exact: true })),
+        "hovered item",
+      ).toBeGreaterThanOrEqual(4.5);
+
+      // The phone drawer uses the same tokens.
+      await page.setViewportSize({ width: 375, height: 812 });
+      await page.getByRole("button", { name: "Open menu" }).click();
+      const drawer = page.getByRole("dialog", { name: "Menu" });
+      await expect(drawer).toBeVisible();
+      await page.waitForTimeout(400);
+      expect(
+        await contrast(drawer.getByRole("link", { name: "My jobs", exact: true })),
+        "drawer active",
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        await contrast(drawer.getByRole("link", { name: "Home", exact: true })),
+        "drawer inactive",
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        await contrast(drawer.getByText(registeredUser.email)),
+        "drawer email",
       ).toBeGreaterThanOrEqual(4.5);
     });
   }

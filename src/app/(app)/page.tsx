@@ -7,14 +7,14 @@ export default function Home() {
     <PageShell centered className="flex flex-col items-center gap-4 text-center">
       <h1 className="text-display">JobPilot</h1>
       <p className="text-body text-muted-foreground">AI-powered job search assistant</p>
-      <nav aria-label="Main" className="mt-2 flex flex-wrap justify-center gap-2">
-        <Link href="/jobs" className={buttonVariants()}>
-          Saved jobs
+      <div className="mt-2 flex flex-wrap justify-center gap-2">
+        <Link href="/jobs/new" className={buttonVariants()}>
+          Add a job
         </Link>
-        <Link href="/profile" className={buttonVariants({ variant: "secondary" })}>
-          Your profile
+        <Link href="/jobs" className={buttonVariants({ variant: "secondary" })}>
+          View saved jobs
         </Link>
-      </nav>
+      </div>
     </PageShell>
   );
 }

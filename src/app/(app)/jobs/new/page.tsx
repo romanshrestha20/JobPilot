@@ -11,7 +11,11 @@ export const metadata = { title: "Add a job · JobPilot" };
 export default function NewJobPage() {
   return (
     <PageShell>
-      <PageHeader title="Add a job" description="Save a posting by pasting its details." />
+      <PageHeader
+        breadcrumbs={[{ label: "My jobs", href: "/jobs" }, { label: "Add a job" }]}
+        title="Add a job"
+        description="Save a posting by pasting its details."
+      />
       <Suspense fallback={<LoadingState label="Loading…" />}>
         <NewJobContent />
       </Suspense>

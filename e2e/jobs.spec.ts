@@ -55,7 +55,10 @@ test.describe("job intake", () => {
     await expect(link).toHaveAttribute("rel", /noopener/);
 
     // List page.
-    await page.getByRole("link", { name: "All jobs" }).click();
+    await page
+      .getByRole("navigation", { name: "Breadcrumb" })
+      .getByRole("link", { name: "My jobs" })
+      .click();
     await expect(page).toHaveURL("/jobs");
     await expect(page.getByRole("link", { name: "Staff platform engineer" })).toBeVisible();
     await expect(
@@ -726,6 +729,8 @@ test.describe("long text", () => {
         const where = `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)}`;
         if (box.right > viewport + 1 || box.left < -1)
           found.push(`${where} sticks out (right=${Math.round(box.right)})`);
+        // Visually hidden helpers (skip link, screen-reader labels) clip on purpose.
+        if (el.classList.contains("sr-only")) continue;
         const style = getComputedStyle(el);
         const clips = style.overflowX !== "visible" && el.scrollWidth > el.clientWidth + 1;
         const isFormControl =
@@ -764,8 +769,8 @@ test.describe("long text", () => {
       await page.goto("/jobs");
       await expect(page.locator("h2 a").first()).toBeVisible();
       await expect(page.locator("h2 a").first()).toHaveText(LONG.title);
-      await expect(page.locator("li").first()).toContainText(LONG.company);
-      await expect(page.locator("li").first()).toContainText(LONG.location);
+      await expect(page.getByRole("main").locator("li").first()).toContainText(LONG.company);
+      await expect(page.getByRole("main").locator("li").first()).toContainText(LONG.location);
       await expectNothingOverflowsOrClips(page, `/jobs at ${at}`);
 
       // Detail: every long value is fully present (wrapped, not truncated).

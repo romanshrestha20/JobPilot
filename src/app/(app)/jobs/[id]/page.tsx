@@ -39,17 +39,13 @@ async function JobContent({ params, searchParams }: Props) {
   return (
     <>
       <PageHeader
+        breadcrumbs={[{ label: "My jobs", href: "/jobs" }, { label: job.title }]}
         title={job.title}
         description={[job.company, job.location].filter(Boolean).join(" · ")}
         actions={
-          <>
-            <Link href={`/jobs/${job.id}/edit`} className={buttonVariants()}>
-              Edit job
-            </Link>
-            <Link href="/jobs" className={buttonVariants({ variant: "secondary" })}>
-              All jobs
-            </Link>
-          </>
+          <Link href={`/jobs/${job.id}/edit`} className={buttonVariants()}>
+            Edit job
+          </Link>
         }
       />
       {(saved === "1" || updated === "1") && (

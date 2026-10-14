@@ -1,10 +1,8 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LoadingState } from "@/components/layout/loading-state";
 import { PageHeader } from "@/components/layout/page-header";
 import { PageShell } from "@/components/layout/page-shell";
-import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { JobForm, getMyJob, toJobFormValues } from "@/features/job-intake";
 import { requireUser } from "@/features/identity/server";
@@ -33,13 +31,13 @@ async function EditJobContent({ params }: Props) {
   return (
     <>
       <PageHeader
+        breadcrumbs={[
+          { label: "My jobs", href: "/jobs" },
+          { label: job.title, href: `/jobs/${job.id}` },
+          { label: "Edit" },
+        ]}
         title="Edit job"
         description={[job.title, job.company].join(" · ")}
-        actions={
-          <Link href={`/jobs/${job.id}`} className={buttonVariants({ variant: "secondary" })}>
-            Back to job
-          </Link>
-        }
       />
       <Card>
         <CardContent>

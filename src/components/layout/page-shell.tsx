@@ -18,7 +18,12 @@ export function PageShell({ width = "form", centered, className, ...props }: Pag
         centered ? "items-center py-8" : "py-12",
       )}
     >
-      <main className={cn("w-full", widths[width], className)} {...props} />
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className={cn("w-full focus-visible:outline-none", widths[width], className)}
+        {...props}
+      />
     </div>
   );
 }

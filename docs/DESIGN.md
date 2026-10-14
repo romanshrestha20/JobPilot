@@ -33,7 +33,7 @@ JobPilot is a calm co-pilot for a stressful task. The interface should feel like
 
 ## Layout
 
-- App shell: a 240px left sidebar (Dashboard, Jobs, Applications, Documents, Interviews) on `card`, content on `background`, max content width 1200px.
+- App shell: every signed-in route sits in the shell from `src/app/(app)/layout.tsx` — a 240px left sidebar from `md` (768px) up, a top bar, and the page content on `background`, max content width 1200px. Sign-in and sign-up are outside it. See _Navigation_.
 - Lists of jobs use `JobCard`; the application pipeline is five columns in status order (Saved → Applied → Interview → Offer → Rejected).
 - Every AI result appears inside `AISuggestion` with _Use this_, _Edit_ and _Discard_. Nothing generated is saved or sent without a click from the user.
 
@@ -295,18 +295,32 @@ export declare function AISuggestion(props: AISuggestionProps): React.JSX.Elemen
 
 ## Implementation status
 
-Implemented in the repo: all colour tokens, the type scale (`display`, `h1`–`h3`, `body`, `body-sm`, `label`, `caption`, `eyebrow`), radius and shadow tokens, and the primitives listed under _Component library_. Not yet built (documented above as design intent): the `score` and `mono` type styles and the mono family on `eyebrow`; `MatchScore`, `JobCard`, `AISuggestion`; the dot-and-word pipeline status badge; a `Dialog` (no screen needs one: the delete confirmation is inline; build it on the native `<dialog>` element when a screen does). Tokens with no consumer yet: `beacon`, `beacon-foreground`, `popover`, `status-*`, `match-*`.
+Implemented in the repo: all colour tokens, the type scale (`display`, `h1`–`h3`, `body`, `body-sm`, `label`, `caption`, `eyebrow`), radius and shadow tokens, and the primitives listed under _Component library_. Also built: the signed-in app shell and navigation (_Navigation_). Not yet built (documented above as design intent): Dashboard, Settings and the career-tool pages (so no nav entries); an account menu beyond name, email and sign out; the `score` and `mono` type styles and the mono family on `eyebrow`; `MatchScore`, `JobCard`, `AISuggestion`; the dot-and-word pipeline status badge; a `Dialog` (no screen needs one: the delete confirmation is inline; build it on the native `<dialog>` element when a screen does). Tokens with no consumer yet: `beacon`, `beacon-foreground`, `popover`, `status-*`, `match-*`.
 
 ## Theme mechanism
 
 `src/app/globals.css` defines every colour as `--token: light-dark(<light>, <dark>)` on `:root` — one declaration per token, no duplicated dark block — and maps them through `@theme inline` so Tailwind generates `bg-card`, `text-muted-foreground`, `border-input`, `rounded-lg`, `shadow-sm`, and the type utilities `text-display`, `text-h1`, `text-h2`, `text-h3`, `text-body`, `text-body-sm`, `text-label`, `text-caption`, `text-eyebrow`.
 
-- `:root { color-scheme: light dark }` follows the OS. `<html data-theme="light">` or `data-theme="dark"` sets `color-scheme` to one side and wins over the OS in both directions; there is no in-app toggle yet. `color-scheme` also themes native controls (select popups, scrollbars).
+- `:root { color-scheme: light dark }` follows the OS. `<html data-theme="light">` or `data-theme="dark"` sets `color-scheme` to one side and wins over the OS in both directions; the theme picker in the top bar sets it. `color-scheme` also themes native controls (select popups, scrollbars).
 - **Browser support.** Native `light-dark()` needs Chrome 123, Firefox 120 or Safari 17.5, newer than the Next.js baseline (Chrome/Edge/Firefox 111+, Safari 16.4+). The build does not rely on it: Next's CSS compiler lowers every `light-dark()` to the `--lightningcss-light` / `--lightningcss-dark` toggle technique (`var(--lightningcss-light, <light>) var(--lightningcss-dark, <dark>)`), including for `data-theme`, which needs no modern-browser feature. Tested: the production build in current Chromium, Firefox and WebKit (`E2E_ALL_BROWSERS=1`). Not tested: the minimum versions themselves (Chrome 111, Safari 16.4, Firefox 111). `e2e/design-system.spec.ts` fails if the compiled CSS ever ships a native `light-dark()`, so the baseline is only raised on purpose.
 - Tokens flip per theme, so components never use `dark:` variants. To change a colour, edit its single `light-dark()` pair and the table above together.
 - Focus is a global `:focus-visible` rule: 2px solid `ring`, 2px offset, with `outline-color` fixed on every element so the ring never animates in from the text colour. Do not remove outlines on controls.
-- `prefers-reduced-motion` shortens animations and transitions globally.
+- `prefers-reduced-motion` shortens animations and transitions globally. The theme can also be chosen in the app (_Navigation_).
 - `--shadow-sm` / `--shadow-md` resolve to theme-specific `--elevation-*` values (a `light-dark()` colour inside each shadow).
+
+## Navigation
+
+One shell, one definition of the links.
+
+- **Structure.** `src/app/(app)/layout.tsx` renders `AppShell` (`src/components/navigation/`) around every signed-in page: skip link, sidebar (`md` and up), top bar, then the page. The `(auth)` group (sign-in, sign-up) and the 404 page are outside it. The shell is presentation only: each page and Server Action still calls `requireUser()`, and `src/proxy.ts` remains an optimistic redirect.
+- **Single source.** `NAV_GROUPS` in `nav-items.ts` lists the groups and links: Workspace (Home, My jobs) and Personal (My profile). Add an item only when its page exists: no placeholder or "coming soon" links, and no empty groups. Career tools (analysis, CV and cover letters, interview preparation) and Settings will appear when those pages ship. The sidebar and the phone drawer render the same `NavList`.
+- **Active route.** `getNavState(pathname, item)` returns `page` (exact match), `section` (nested under a `match: "section"` item, matched on a segment boundary so `/jobsx` is not `/jobs`) or none. An exact match sets `aria-current="page"`, a parent section `aria-current="true"`; both are styled `accent` / `accent-foreground`, medium weight. Inactive items are `muted-foreground`, and hover is `muted` with `foreground` text. Home matches only `/`.
+- **Header.** The top bar holds the theme picker (and on phones the menu button and brand). Page context lives in the page: `PageHeader` takes `breadcrumbs` (`Breadcrumbs`, a `nav aria-label="Breadcrumb"`; the last item is the current page, `aria-current="page"`, not a link). Detail and edit pages show `My jobs / <title> / Edit`; top-level pages show none.
+- **Phones (< 768px).** The sidebar is hidden and a menu button opens the links in a native modal `<dialog>` labelled "Menu". The browser supplies the focus trap, Escape, the inert page behind it and focus return to the button; the drawer also closes on a link click, on route change, on the close button and on the backdrop. It has no animation, so there is nothing to reduce for `prefers-reduced-motion`. Focus can leave the dialog only for the browser's own UI.
+- **Account.** The sidebar footer and the drawer show the signed-in name and email and a Sign out button (one session lookup per request, shared by both). Signing out returns to `/sign-in`.
+- **Theme picker.** A native select in the top bar: System, Light or Dark. Light and dark set `<html data-theme>` and are remembered in `localStorage` (`jobpilot-theme`); System removes the attribute so the OS decides. An inline script in the root `<head>` applies a saved choice before first paint. If storage is unavailable the choice still applies until reload.
+- **Skip link.** The first Tab stop on every signed-in page is "Skip to main content", which moves focus to `<main id="main-content">` (every `PageShell` renders it).
+- **Icons.** Inline, decorative SVGs (`aria-hidden`) next to a text label. Add new ones to `nav-icons.tsx`; no icon dependency.
 
 ## Component library
 
@@ -328,7 +342,9 @@ Primitives live in `src/components/ui/` (generic, no feature knowledge); layout 
 | `Alert` (+ `AlertTitle`, `AlertDescription`)                                         | `variant`: `info`, `success`, `warning`, `destructive`                                                    | Feedback with a distinct icon shape per variant. `destructive` uses `role="alert"`, others `role="status"`.  |
 | `linkClass`                                                                          | string constant in `ui/link.tsx`                                                                          | Inline text links: `primary-strong`, medium weight, underlined. Never hand-write link classes.               |
 | `PageShell`                                                                          | `width`: `narrow`, `form` (default), `wide`; `centered`                                                   | Page container with gutters and max width. Renders the `<main>`.                                             |
-| `PageHeader`                                                                         | `title`, `description`, `actions`                                                                         | The page `h1`.                                                                                               |
+| `PageHeader`                                                                         | `title`, `description`, `actions`, `breadcrumbs`                                                          | The page `h1`, with an optional breadcrumb trail above it.                                                   |
+| `Breadcrumbs`                                                                        | `items`: `{ label, href? }`; the last item is the current page                                            | Path back up to a section on nested pages.                                                                   |
+| `AppShell`, `NavList`, `MobileNav`, `ThemeSelect`, `AccountPanel`                    | in `src/components/navigation/`                                                                           | The signed-in frame; see _Navigation_. Links come from `NAV_GROUPS`.                                         |
 | `FormSection`                                                                        | `title`, `description`                                                                                    | Titled group of fields.                                                                                      |
 | `EmptyState`                                                                         | `title`, `description`, `action`                                                                          | Nothing-here-yet panels.                                                                                     |
 | `LoadingState`                                                                       | `label`                                                                                                   | Suspense fallback for a section.                                                                             |
@@ -346,7 +362,7 @@ Primitives live in `src/components/ui/` (generic, no feature knowledge); layout 
 - Use semantic tokens only: `bg-card`, `text-muted-foreground`, `border-input`, `text-destructive`. No palette colours (`zinc-*`, `red-*`), no hex/rgb values, no `dark:` variants, no arbitrary values for colour, radius or type size. If no token fits, add one here and in `globals.css` first.
 - Do not recreate a primitive. If a screen needs a button, input, card, alert or field wrapper, use the existing one. Duplicated class strings for controls are a review failure.
 - Feature modules compose primitives; they do not add domain behaviour to `src/components/ui/`. Domain components (e.g. `JobCard`) belong to their feature module and are built from primitives.
-- Pages use `PageShell` + `PageHeader`; loading fallbacks use `LoadingState` or `Skeleton`.
+- Signed-in pages live under `src/app/(app)/` and use `PageShell` + `PageHeader` (with `breadcrumbs` when nested); loading fallbacks use `LoadingState` or `Skeleton`. Never add navigation markup to a page: add the item to `NAV_GROUPS`.
 - Inline links use `linkClass`; text in the brand colour uses `primary-strong`, never `primary`.
 - Typography uses the `text-*` scale above. One `h1` per page, supplied by `PageHeader` or `AuthShell`.
 
