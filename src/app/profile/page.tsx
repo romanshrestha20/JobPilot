@@ -1,4 +1,8 @@
 import { Suspense } from "react";
+import { PageShell } from "@/components/layout/page-shell";
+import { PageHeader } from "@/components/layout/page-header";
+import { LoadingState } from "@/components/layout/loading-state";
+import { Card, CardContent } from "@/components/ui/card";
 import { ProfileForm, getMyProfile, toFormValues } from "@/features/candidate-profile";
 import { requireUser } from "@/features/identity/server";
 
@@ -6,16 +10,12 @@ export const metadata = { title: "Your profile · JobPilot" };
 
 export default function ProfilePage() {
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-12 dark:bg-black">
-      <main className="w-full max-w-xl">
-        <h1 className="mb-6 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Your profile
-        </h1>
-        <Suspense fallback={<p className="text-sm text-zinc-500">Loading your profile…</p>}>
-          <ProfileContent />
-        </Suspense>
-      </main>
-    </div>
+    <PageShell>
+      <PageHeader title="Your profile" />
+      <Suspense fallback={<LoadingState label="Loading your profile…" />}>
+        <ProfileContent />
+      </Suspense>
+    </PageShell>
   );
 }
 
@@ -23,5 +23,11 @@ export default function ProfilePage() {
 async function ProfileContent() {
   const user = await requireUser();
   const profile = await getMyProfile(user);
-  return <ProfileForm initialValues={toFormValues(profile)} />;
+  return (
+    <Card>
+      <CardContent>
+        <ProfileForm initialValues={toFormValues(profile)} />
+      </CardContent>
+    </Card>
+  );
 }

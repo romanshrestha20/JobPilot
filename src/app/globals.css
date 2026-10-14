@@ -1,26 +1,225 @@
 @import "tailwindcss";
 
+/*
+ * JobPilot design tokens. Source of truth: docs/DESIGN.md.
+ *
+ * Light values live on :root. Dark values apply when the OS prefers dark,
+ * unless <html data-theme="light"> forces light; <html data-theme="dark">
+ * forces dark. The dark block therefore appears twice; keep both in sync.
+ * Components use only the semantic utilities below (bg-card, text-muted-foreground…),
+ * never `dark:` variants or raw palette colors.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f7f5;
+  --foreground: #14191c;
+  --card: #ffffff;
+  --card-foreground: var(--foreground);
+  --popover: #ffffff;
+  --popover-foreground: var(--foreground);
+  --primary: #0c6a56;
+  --primary-foreground: #ffffff;
+  --secondary: #eaedea;
+  --secondary-foreground: var(--foreground);
+  --muted: #eaedea;
+  --muted-foreground: #566066;
+  --accent: #dff0e9;
+  --accent-foreground: #0a4a3c;
+  --destructive: #b3261e;
+  --destructive-foreground: #ffffff;
+  --border: #dbe0dc;
+  --input: #848d92;
+  --ring: var(--primary);
+  --beacon: #9a5200;
+  --beacon-soft: #fbeed6;
+  --beacon-foreground: #ffffff;
+  --success: #16723a;
+  --success-soft: #e1f3e7;
+  --warning: #8a5a00;
+  --warning-soft: #fbf0d4;
+  --info: #1d5fb8;
+  --info-soft: #e3edfb;
+  --danger-soft: #fbe5e3;
+  --status-saved: var(--muted-foreground);
+  --status-applied: var(--info);
+  --status-interview: var(--primary);
+  --status-offer: var(--success);
+  --status-rejected: var(--destructive);
+  --match-high: var(--primary);
+  --match-mid: var(--warning);
+  --match-low: var(--muted-foreground);
+  --match-track: #e3e7e4;
+  --elevation-sm: 0 1px 2px rgba(20, 25, 28, 0.06);
+  --elevation-md: 0 8px 24px rgba(20, 25, 28, 0.1), 0 2px 6px rgba(20, 25, 28, 0.06);
+  --radius: 12px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0d1113;
+    --foreground: #e7eae8;
+    --card: #151b1e;
+    --popover: #1b2226;
+    --primary: #46c4a0;
+    --primary-foreground: #04241c;
+    --secondary: #212a2e;
+    --muted: #1c2427;
+    --muted-foreground: #99a4a9;
+    --accent: #14322a;
+    --accent-foreground: #9be6cd;
+    --destructive: #f07167;
+    --destructive-foreground: #2b0705;
+    --border: #283135;
+    --input: #66717a;
+    --beacon: #f2ad4e;
+    --beacon-soft: #33250f;
+    --beacon-foreground: #2a1700;
+    --success: #5fcf86;
+    --success-soft: #14301f;
+    --warning: #e8b84a;
+    --warning-soft: #2f2610;
+    --info: #7ab0f5;
+    --info-soft: #15253c;
+    --danger-soft: #3a1513;
+    --match-track: #283135;
+    --elevation-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --elevation-md: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #0d1113;
+  --foreground: #e7eae8;
+  --card: #151b1e;
+  --popover: #1b2226;
+  --primary: #46c4a0;
+  --primary-foreground: #04241c;
+  --secondary: #212a2e;
+  --muted: #1c2427;
+  --muted-foreground: #99a4a9;
+  --accent: #14322a;
+  --accent-foreground: #9be6cd;
+  --destructive: #f07167;
+  --destructive-foreground: #2b0705;
+  --border: #283135;
+  --input: #66717a;
+  --beacon: #f2ad4e;
+  --beacon-soft: #33250f;
+  --beacon-foreground: #2a1700;
+  --success: #5fcf86;
+  --success-soft: #14301f;
+  --warning: #e8b84a;
+  --warning-soft: #2f2610;
+  --info: #7ab0f5;
+  --info-soft: #15253c;
+  --danger-soft: #3a1513;
+  --match-track: #283135;
+  --elevation-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elevation-md: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-beacon: var(--beacon);
+  --color-beacon-soft: var(--beacon-soft);
+  --color-beacon-foreground: var(--beacon-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-danger-soft: var(--danger-soft);
+  --color-status-saved: var(--status-saved);
+  --color-status-applied: var(--status-applied);
+  --color-status-interview: var(--status-interview);
+  --color-status-offer: var(--status-offer);
+  --color-status-rejected: var(--status-rejected);
+  --color-match-high: var(--match-high);
+  --color-match-mid: var(--match-mid);
+  --color-match-low: var(--match-low);
+  --color-match-track: var(--match-track);
+
+  --font-sans: var(--font-geist-sans), "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: var(--radius);
+
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+
+  /* Type scale: text-display, text-h1 … text-eyebrow (size / line / weight / tracking). */
+  --text-display: 2.25rem;
+  --text-display--line-height: 2.5rem;
+  --text-display--font-weight: 600;
+  --text-display--letter-spacing: -0.02em;
+  --text-h1: 1.75rem;
+  --text-h1--line-height: 2.125rem;
+  --text-h1--font-weight: 600;
+  --text-h1--letter-spacing: -0.015em;
+  --text-h2: 1.375rem;
+  --text-h2--line-height: 1.75rem;
+  --text-h2--font-weight: 600;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h3: 1.0625rem;
+  --text-h3--line-height: 1.5rem;
+  --text-h3--font-weight: 600;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5rem;
+  --text-body-sm: 0.8125rem;
+  --text-body-sm--line-height: 1.25rem;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1rem;
+  --text-label--font-weight: 500;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-eyebrow: 0.6875rem;
+  --text-eyebrow--line-height: 1rem;
+  --text-eyebrow--font-weight: 500;
+  --text-eyebrow--letter-spacing: 0.08em;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    @apply bg-background text-foreground font-sans text-body antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }

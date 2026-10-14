@@ -1,6 +1,6 @@
 # JobPilot Design System
 
-Design reference for the JobPilot UI. Built for Next.js + Tailwind CSS v4 + shadcn/ui, with Geist and Geist Mono (already loaded in `src/app/layout.tsx`). Token names follow shadcn/ui so they map directly into `src/app/globals.css`.
+Design reference for the JobPilot UI. Built for Next.js + Tailwind CSS v4 + shadcn/ui, with Geist and Geist Mono (already loaded in `src/app/layout.tsx`). Token names follow shadcn/ui and are implemented in `src/app/globals.css`, which is the executable source of truth (see _Implementation status_).
 
 Principle: **the AI proposes, the user decides.** Calm neutrals, one confident green for direction (`primary`), and amber (`beacon`) only where AI has been at work.
 
@@ -35,7 +35,7 @@ JobPilot is a calm co-pilot for a stressful task. The interface should feel like
 
 ## Spacing, radius, elevation
 
-- A 4px grid: `space-1` through `space-12`. Cards pad `space-4`; cards stack `space-6` apart; page gutters are `space-8` on desktop and `space-4` on mobile.
+- A 4px grid: `space-1` through `space-12`. Cards pad `space-6`; cards stack `space-6` apart; page gutters are `space-8` on desktop and `space-4` on mobile.
 - Corners: `radius-sm` badges and checkboxes, `radius-md` buttons and inputs, `radius-lg` cards and dialogs (this is shadcn's `--radius`). `radius-full` only for dots and avatars.
 - Separate with `border` hairlines first; `shadow-sm` for cards at rest, `shadow-md` only for things that float (menus, dialogs, a dragged pipeline card). No gradients.
 
@@ -60,7 +60,7 @@ JobPilot is a calm co-pilot for a stressful task. The interface should feel like
 
 ## Using it in the codebase
 
-The token names match shadcn/ui (`background`, `primary`, `muted-foreground`, `ring`…), so they drop into `src/app/globals.css` as CSS variables under `:root` and `.dark`, mapped through `@theme inline` for Tailwind v4 (`bg-primary`, `text-muted-foreground`, `rounded-lg`). The domain tokens (`beacon`, `status-*`, `match-*`) map the same way: `text-beacon`, `bg-status-offer`.
+The token names match shadcn/ui (`background`, `primary`, `muted-foreground`, `ring`…), so they drop into `src/app/globals.css` as CSS variables under `:root` (light) with dark overrides selected by `prefers-color-scheme` or `data-theme` (see _Theme mechanism_), mapped through `@theme inline` for Tailwind v4 (`bg-primary`, `text-muted-foreground`, `rounded-lg`). The domain tokens (`beacon`, `status-*`, `match-*`) map the same way: `text-beacon`, `bg-status-offer`.
 
 ## Color tokens
 
@@ -130,15 +130,15 @@ Every text pairing below meets WCAG AA (4.5:1) on the surfaces named in its usag
 
 ## Spacing
 
-| Token      | Value  | Usage                                                        |
-| ---------- | ------ | ------------------------------------------------------------ |
-| `space-1`  | `4px`  | Icon-to-text gap, badge vertical padding.                    |
-| `space-2`  | `8px`  | Gap inside controls, between badges, tight stacks.           |
-| `space-3`  | `12px` | Button horizontal padding (sm), list row padding.            |
-| `space-4`  | `16px` | Card padding, button horizontal padding, form field gap.     |
-| `space-6`  | `24px` | Gap between cards, panel padding, section gap inside a page. |
-| `space-8`  | `32px` | Page gutter on desktop; gap between page sections.           |
-| `space-12` | `48px` | Top of page to title; empty-state padding.                   |
+| Token      | Value  | Usage                                                   |
+| ---------- | ------ | ------------------------------------------------------- |
+| `space-1`  | `4px`  | Icon-to-text gap, badge vertical padding.               |
+| `space-2`  | `8px`  | Gap inside controls, between badges, tight stacks.      |
+| `space-3`  | `12px` | Button horizontal padding (sm), list row padding.       |
+| `space-4`  | `16px` | Button horizontal padding, form field gap.              |
+| `space-6`  | `24px` | Card and panel padding, gap between cards, section gap. |
+| `space-8`  | `32px` | Page gutter on desktop; gap between page sections.      |
+| `space-12` | `48px` | Top of page to title; empty-state padding.              |
 
 ## Radius
 
@@ -266,154 +266,75 @@ export declare function JobCard(props: JobCardProps): React.JSX.Element;
 export declare function AISuggestion(props: AISuggestionProps): React.JSX.Element;
 ```
 
-## Drop-in `src/app/globals.css`
+## Implementation status
 
-Replaces the current create-next-app defaults. Dark mode uses shadcn's `.dark` class (add `next-themes` or toggle the class on `<html>`).
+Implemented in the repo: all colour tokens, the type scale (`display`, `h1`–`h3`, `body`, `body-sm`, `label`, `caption`, `eyebrow`), radius and shadow tokens, and the primitives listed under _Component library_. Not yet built (documented above as design intent): the `score` and `mono` type styles and the mono family on `eyebrow` (`globals.css` defines `eyebrow` size, weight and tracking only; add `--text-score` / `--text-mono` and set the family when a screen needs them), `MatchScore`, `JobCard`, `AISuggestion`, the `ai` Button variant, status/`ai` Badge tones, the app shell, Dialog, and Lucide icons. Build them under the rules below when a feature needs them. No component library (Radix, shadcn CLI, cva) is installed; primitives are plain React + Tailwind.
 
-```css
-@import "tailwindcss";
+## Theme mechanism
 
-@custom-variant dark (&:is(.dark *));
+`src/app/globals.css` defines every token as a CSS variable on `:root` (light) and maps them through `@theme inline` so Tailwind generates `bg-card`, `text-muted-foreground`, `border-input`, `rounded-lg`, `shadow-sm`, and the type utilities `text-display`, `text-h1`, `text-h2`, `text-h3`, `text-body`, `text-body-sm`, `text-label`, `text-caption`, `text-eyebrow`.
 
-:root {
-  --background: #f6f7f5;
-  --foreground: #14191c;
-  --card: #ffffff;
-  --card-foreground: var(--foreground);
-  --popover: #ffffff;
-  --popover-foreground: var(--foreground);
-  --primary: #0c6a56;
-  --primary-foreground: #ffffff;
-  --secondary: #eaedea;
-  --secondary-foreground: var(--foreground);
-  --muted: #eaedea;
-  --muted-foreground: #566066;
-  --accent: #dff0e9;
-  --accent-foreground: #0a4a3c;
-  --destructive: #b3261e;
-  --destructive-foreground: #ffffff;
-  --border: #dbe0dc;
-  --input: #848d92;
-  --ring: var(--primary);
-  --beacon: #9a5200;
-  --beacon-soft: #fbeed6;
-  --beacon-foreground: #ffffff;
-  --success: #16723a;
-  --success-soft: #e1f3e7;
-  --warning: #8a5a00;
-  --warning-soft: #fbf0d4;
-  --info: #1d5fb8;
-  --info-soft: #e3edfb;
-  --danger-soft: #fbe5e3;
-  --status-saved: var(--muted-foreground);
-  --status-applied: var(--info);
-  --status-interview: var(--primary);
-  --status-offer: var(--success);
-  --status-rejected: var(--destructive);
-  --match-high: var(--primary);
-  --match-mid: var(--warning);
-  --match-low: var(--muted-foreground);
-  --match-track: #e3e7e4;
-  --radius: 12px;
-}
+- Dark follows the OS (`prefers-color-scheme`). `<html data-theme="light">` or `data-theme="dark"` overrides it; there is no in-app toggle yet. The dark block exists twice in the stylesheet (media query and `data-theme="dark"`); change both together.
+- Tokens flip per theme, so components never use `dark:` variants.
+- Focus is a global `:focus-visible` rule: 2px solid `ring`, 2px offset. Do not remove outlines on controls.
+- `prefers-reduced-motion` shortens animations and transitions globally.
+- `--shadow-sm` / `--shadow-md` resolve to theme-specific `--elevation-*` values.
 
-.dark {
-  --background: #0d1113;
-  --foreground: #e7eae8;
-  --card: #151b1e;
-  --card-foreground: var(--foreground);
-  --popover: #1b2226;
-  --popover-foreground: var(--foreground);
-  --primary: #46c4a0;
-  --primary-foreground: #04241c;
-  --secondary: #212a2e;
-  --secondary-foreground: var(--foreground);
-  --muted: #1c2427;
-  --muted-foreground: #99a4a9;
-  --accent: #14322a;
-  --accent-foreground: #9be6cd;
-  --destructive: #f07167;
-  --destructive-foreground: #2b0705;
-  --border: #283135;
-  --input: #66717a;
-  --ring: var(--primary);
-  --beacon: #f2ad4e;
-  --beacon-soft: #33250f;
-  --beacon-foreground: #2a1700;
-  --success: #5fcf86;
-  --success-soft: #14301f;
-  --warning: #e8b84a;
-  --warning-soft: #2f2610;
-  --info: #7ab0f5;
-  --info-soft: #15253c;
-  --danger-soft: #3a1513;
-  --status-saved: var(--muted-foreground);
-  --status-applied: var(--info);
-  --status-interview: var(--primary);
-  --status-offer: var(--success);
-  --status-rejected: var(--destructive);
-  --match-high: var(--primary);
-  --match-mid: var(--warning);
-  --match-low: var(--muted-foreground);
-  --match-track: #283135;
-}
+## Component library
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-beacon: var(--beacon);
-  --color-beacon-soft: var(--beacon-soft);
-  --color-beacon-foreground: var(--beacon-foreground);
-  --color-success: var(--success);
-  --color-success-soft: var(--success-soft);
-  --color-warning: var(--warning);
-  --color-warning-soft: var(--warning-soft);
-  --color-info: var(--info);
-  --color-info-soft: var(--info-soft);
-  --color-danger-soft: var(--danger-soft);
-  --color-status-saved: var(--status-saved);
-  --color-status-applied: var(--status-applied);
-  --color-status-interview: var(--status-interview);
-  --color-status-offer: var(--status-offer);
-  --color-status-rejected: var(--status-rejected);
-  --color-match-high: var(--match-high);
-  --color-match-mid: var(--match-mid);
-  --color-match-low: var(--match-low);
-  --color-match-track: var(--match-track);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: var(--radius);
-  --shadow-sm: 0 1px 2px rgba(20, 25, 28, 0.06);
-  --shadow-md: 0 8px 24px rgba(20, 25, 28, 0.1), 0 2px 6px rgba(20, 25, 28, 0.06);
-}
+Primitives live in `src/components/ui/` (generic, no feature knowledge); layout patterns in `src/components/layout/`; the auth frame in `src/components/auth/auth-shell.tsx`. All accept standard element props (including `className` and `ref`) and are server-component safe.
 
-@layer base {
-  * {
-    @apply border-border outline-ring;
-  }
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-  }
-}
+| Component                                                                            | Variants / props                                                                                          | Use for                                                                                                      |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `Button`                                                                             | `variant`: `primary` (default), `secondary`, `ghost`, `destructive`; `size`: `sm`, `md`; `loading`        | Actions. Defaults to `type="button"`; pass `type="submit"` in forms. `loading` disables and shows a spinner. |
+| `Input`, `Textarea`                                                                  | native props; `aria-invalid` turns the border `destructive`                                               | Text entry. Always pair with a label via `FormField`.                                                        |
+| `Label`                                                                              | native label props                                                                                        | Standalone labels.                                                                                           |
+| `Checkbox`                                                                           | `label` (required)                                                                                        | Single boolean choices inside a `FieldGroup`.                                                                |
+| `FormField`                                                                          | `id`, `label`, `hint`, `error`; children is a function receiving `{ id, aria-describedby, aria-invalid }` | Label + control + hint + error, correctly wired.                                                             |
+| `FieldGroup`                                                                         | `id`, `legend`, `error`                                                                                   | Fieldset for related checkboxes/radios.                                                                      |
+| `Card` (+ `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`) |                                                                                                           | Raised surface on `card` with `border` and `shadow-sm`.                                                      |
+| `Badge`                                                                              | `tone`: `neutral`, `accent`, `success`, `warning`, `info`, `danger`, `tag`                                | Short labels. Colour never carries meaning alone: keep a word.                                               |
+| `Separator`                                                                          | `orientation`, `decorative`                                                                               | Dividers (hairline `border`).                                                                                |
+| `Skeleton`, `Spinner`                                                                | `Spinner` has `label` (empty string when a nearby label exists)                                           | Loading placeholders.                                                                                        |
+| `Alert` (+ `AlertTitle`, `AlertDescription`)                                         | `variant`: `info`, `success`, `warning`, `destructive`                                                    | Feedback. `destructive` uses `role="alert"`, others `role="status"`.                                         |
+| `PageShell`                                                                          | `width`: `narrow`, `form` (default), `wide`; `centered`                                                   | Page container with gutters and max width. Renders the `<main>`.                                             |
+| `PageHeader`                                                                         | `title`, `description`, `actions`                                                                         | The page `h1`.                                                                                               |
+| `FormSection`                                                                        | `title`, `description`                                                                                    | Titled group of fields.                                                                                      |
+| `EmptyState`                                                                         | `title`, `description`, `action`                                                                          | Nothing-here-yet panels.                                                                                     |
+| `LoadingState`                                                                       | `label`                                                                                                   | Suspense fallback for a section.                                                                             |
+| `AuthShell`                                                                          | `title`, `footer`                                                                                         | Sign-in and sign-up frame.                                                                                   |
+
+```tsx
+<FormField id="email" label="Email" error={errors.email}>
+  {(control) => <Input {...control} name="email" type="email" />}
+</FormField>
+<Button type="submit" loading={pending}>Save profile</Button>
 ```
 
-Usage in components: `bg-primary text-primary-foreground`, `text-muted-foreground`, `bg-beacon-soft text-beacon`, `bg-info-soft text-status-applied`, `rounded-lg`, `shadow-sm`. Tailwind's default spacing scale (4px steps) matches `space-*`: `p-4` = `space-4`, `gap-6` = `space-6`.
+## Rules for feature screens
+
+- Use semantic tokens only: `bg-card`, `text-muted-foreground`, `border-input`, `text-destructive`. No palette colours (`zinc-*`, `red-*`), no hex/rgb values, no `dark:` variants, no arbitrary values for colour, radius or type size. If no token fits, add one here and in `globals.css` first.
+- Do not recreate a primitive. If a screen needs a button, input, card, alert or field wrapper, use the existing one. Duplicated class strings for controls are a review failure.
+- Feature modules compose primitives; they do not add domain behaviour to `src/components/ui/`. Domain components (e.g. `JobCard`) belong to their feature module and are built from primitives.
+- Pages use `PageShell` + `PageHeader`; loading fallbacks use `LoadingState` or `Skeleton`.
+- Typography uses the `text-*` scale above. One `h1` per page, supplied by `PageHeader` or `AuthShell`.
+
+## Adding a new component
+
+1. Check the table above and `src/components/ui/` first; extend a variant rather than adding a near-duplicate.
+2. Place it in `ui/` (generic) or `layout/` (page structure), one file per component, named in kebab-case.
+3. Type props by extending `React.ComponentProps<"element">`, spread the rest onto the element, and accept `className`. Variants are a `const` map keyed by name; use `cn()` from `ui/cn.ts`.
+4. Use only semantic tokens and the global focus ring. Keep both themes correct without `dark:`.
+5. Document it in the table above with variants and usage.
+6. Add a new token only when no existing one carries the meaning; verify its contrast in both themes.
+
+## Accessibility requirements
+
+- Every control has a visible label (`FormField`/`Label`); placeholders are examples, never labels.
+- Errors and hints are linked with `aria-describedby`, and invalid controls set `aria-invalid`.
+- Interactive elements show the global focus ring (2px `ring`, 2px offset) in both themes, never removed.
+- Text meets 4.5:1 and control borders/focus ring 3:1, using only the token pairings in _Color tokens_.
+- Status is never colour alone: pair with a word or icon.
+- Everything works by keyboard with native elements first (`button`, `input`, `fieldset`); add ARIA only to fill gaps.
+- Loading and dynamic feedback is announced (`Spinner` label, `Alert` roles, `aria-live` regions); busy buttons set `aria-busy`.
+- Motion respects `prefers-reduced-motion`.
