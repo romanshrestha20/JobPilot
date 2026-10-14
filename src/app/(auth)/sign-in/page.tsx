@@ -1,17 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "@/components/auth/auth-client";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { LoadingState } from "@/components/layout/loading-state";
+import { safeNextPath, withNext } from "@/lib/safe-redirect";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 
+// useSearchParams needs a Suspense boundary under Cache Components.
 export default function SignInPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Loading…" />}>
+      <SignInContent />
+    </Suspense>
+  );
+}
+
+function SignInContent() {
   const router = useRouter();
+  const next = safeNextPath(useSearchParams().get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -30,7 +42,7 @@ export default function SignInPage() {
       return;
     }
 
-    router.push("/");
+    router.push(safeNextPath(next));
   }
 
   return (
@@ -39,7 +51,10 @@ export default function SignInPage() {
       footer={
         <>
           Don&apos;t have an account?{" "}
-          <Link href="/sign-up" className="font-medium text-primary underline underline-offset-4">
+          <Link
+            href={withNext("/sign-up", next)}
+            className="font-medium text-primary underline underline-offset-4"
+          >
             Sign up
           </Link>
         </>

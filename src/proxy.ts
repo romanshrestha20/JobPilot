@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
+import { safeNextPath, signInUrlFor } from "@/lib/safe-redirect";
 
 const PUBLIC_PATHS = ["/sign-in", "/sign-up"];
 const AUTH_API_PREFIX = "/api/auth";
@@ -20,14 +21,16 @@ export default async function proxy(request: NextRequest) {
 
   // Signed-in user hitting auth pages → send home
   if (isAuthenticated && isPublic) {
-    return NextResponse.redirect(new URL("/", request.url));
+    // Honor a validated ?next= so a deep link survives a visit to /sign-in while signed in.
+    const next = safeNextPath(request.nextUrl.searchParams.get("next"));
+    return NextResponse.redirect(new URL(next, request.url));
   }
 
   // Unauthenticated user hitting protected pages → send to sign-in
   if (!isAuthenticated && !isPublic) {
-    const signIn = new URL("/sign-in", request.url);
-    signIn.searchParams.set("next", pathname);
-    return NextResponse.redirect(signIn);
+    return NextResponse.redirect(
+      new URL(signInUrlFor(pathname + request.nextUrl.search), request.url),
+    );
   }
 
   return NextResponse.next();
