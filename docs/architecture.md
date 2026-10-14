@@ -113,6 +113,9 @@ Existing shared files include:
 - `src/lib/schema.ts`: Better Auth tables.
 - `src/lib/auth.ts`: Better Auth server configuration.
 - `src/components/auth/auth-client.ts`: Better Auth browser client (client-only, so it lives outside `lib/`).
+- `src/lib/authz.ts`: framework-free authorization helpers: `requireUserFromHeaders`, `assertOwned`, and the `UnauthenticatedError` / `NotFoundError` types.
+- `src/lib/api-auth.ts`: `withUser` wrapper for route handlers (401 when signed out, 404 for missing or not-owned records).
+- `src/features/identity/server.ts`: `requireUser()` for Server Components and server actions (redirects to `/sign-in`).
 - `src/lib/env.ts`: environment validation.
 
 As capabilities are implemented, shared infrastructure may be added under `src/lib/ai/`, `src/lib/storage/`, or similarly focused paths. Avoid speculative abstractions.
@@ -285,7 +288,7 @@ Future storage configuration should be introduced only with a storage implementa
 
 ## 13. Testing and quality
 
-Automated tests were not present in the inspected repository snapshot. Configure the test runner and scripts before relying on the testing strategy below.
+Vitest is configured (`pnpm test`, `vitest.config.mts`) with unit tests for the authorization helpers. No integration, AI-evaluation, or end-to-end tests exist yet; the layers below describe what is still required.
 
 Required test layers:
 - **Unit:** scoring, skill normalization, status transitions, validation, and domain rules.
