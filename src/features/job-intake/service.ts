@@ -1,6 +1,13 @@
 import type { ZodError } from "zod";
 import type { JobRecord, JobRepository } from "./repository";
-import { type JobDto, type JobSummaryDto, jobIdSchema, jobInputSchema } from "./validation";
+import {
+  type JobDto,
+  type JobStatus,
+  type JobSummaryDto,
+  jobIdSchema,
+  jobInputSchema,
+  jobStatusInputSchema,
+} from "./validation";
 
 export const JOBS_PAGE_SIZE = 20;
 
@@ -12,7 +19,14 @@ export type UpdateJobResult =
   | { ok: false; reason: "not_found" }
   | { ok: false; reason: "invalid"; errors: ZodError["issues"] };
 
-export type JobsPage = { jobs: JobSummaryDto[]; page: number; hasMore: boolean };
+export type UpdateJobStatusResult = UpdateJobResult;
+
+export type JobsPage = {
+  jobs: JobSummaryDto[];
+  page: number;
+  hasMore: boolean;
+  status?: JobStatus;
+};
 
 function toDto(record: JobRecord): JobDto {
   return {
@@ -22,6 +36,7 @@ function toDto(record: JobRecord): JobDto {
     location: record.location,
     sourceUrl: record.sourceUrl,
     description: record.description,
+    status: record.status as JobStatus,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -48,15 +63,17 @@ export function createJobService(repository: JobRepository) {
       return { ok: true, job: toDto(record) };
     },
 
-    async listMyJobs(user: { id: string }, page = 1): Promise<JobsPage> {
+    async listMyJobs(user: { id: string }, page = 1, status?: JobStatus): Promise<JobsPage> {
       const safePage = Number.isInteger(page) && page >= 1 ? page : 1;
       // Fetch one extra row to learn whether a next page exists without a count query.
       const rows = await repository.listForUser(user.id, {
         limit: JOBS_PAGE_SIZE + 1,
         offset: (safePage - 1) * JOBS_PAGE_SIZE,
+        status,
       });
       return {
-        jobs: rows.slice(0, JOBS_PAGE_SIZE),
+        jobs: rows.slice(0, JOBS_PAGE_SIZE) as JobSummaryDto[],
+        status,
         page: safePage,
         hasMore: rows.length > JOBS_PAGE_SIZE,
       };
@@ -81,6 +98,25 @@ export function createJobService(repository: JobRepository) {
       }
 
       const record = await repository.updateForUser(user.id, id, parsed.data);
+      return record ? { ok: true, job: toDto(record) } : { ok: false, reason: "not_found" };
+    },
+
+    async updateMyJobStatus(
+      user: { id: string },
+      id: string,
+      input: unknown,
+    ): Promise<UpdateJobStatusResult> {
+      if (!jobIdSchema.safeParse(id).success) return { ok: false, reason: "not_found" };
+
+      const parsed = jobStatusInputSchema.safeParse(input);
+      if (!parsed.success) {
+        // As for edits: a non-owner is told "not found" whatever they submit.
+        const owned = await repository.findForUser(user.id, id);
+        if (!owned) return { ok: false, reason: "not_found" };
+        return { ok: false, reason: "invalid", errors: parsed.error.issues };
+      }
+
+      const record = await repository.updateStatusForUser(user.id, id, parsed.data.status);
       return record ? { ok: true, job: toDto(record) } : { ok: false, reason: "not_found" };
     },
 

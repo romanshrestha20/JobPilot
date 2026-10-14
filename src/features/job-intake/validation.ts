@@ -88,6 +88,42 @@ export type JobInput = z.output<typeof jobInputSchema>;
 
 export const jobIdSchema = z.uuid();
 
+/**
+ * Application status of a saved job (current status only; no history yet). The database repeats
+ * this list as a CHECK constraint, built from this constant in schema.ts.
+ */
+export const JOB_STATUSES = [
+  "saved",
+  "applied",
+  "interviewing",
+  "offered",
+  "rejected",
+  "withdrawn",
+] as const;
+export type JobStatus = (typeof JOB_STATUSES)[number];
+
+export const DEFAULT_JOB_STATUS: JobStatus = "saved";
+
+export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
+  saved: "Saved",
+  applied: "Applied",
+  interviewing: "Interviewing",
+  offered: "Offered",
+  rejected: "Rejected",
+  withdrawn: "Withdrawn",
+};
+
+export const jobStatusSchema = z.enum(JOB_STATUSES, { error: "Choose a status from the list." });
+
+/** Input of the dedicated status-change operation. Strict: nothing but `status` is accepted. */
+export const jobStatusInputSchema = z.strictObject({ status: jobStatusSchema });
+
+/** A status from untrusted input (e.g. a `?status=` filter), or undefined when it is not one. */
+export function parseJobStatus(value: unknown): JobStatus | undefined {
+  const parsed = jobStatusSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
 /** Full posting as returned to the owner. */
 export type JobDto = {
   id: string;
@@ -96,6 +132,7 @@ export type JobDto = {
   location: string | null;
   sourceUrl: string | null;
   description: string;
+  status: JobStatus;
   createdAt: Date;
   updatedAt: Date;
 };

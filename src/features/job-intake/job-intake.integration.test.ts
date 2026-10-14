@@ -317,3 +317,199 @@ describe("editing a job (real PostgreSQL)", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("application status (real PostgreSQL)", () => {
+  async function rowById(id: string) {
+    const [row] = await db.select().from(jobPosting).where(eq(jobPosting.id, id));
+    return row;
+  }
+
+  it("gives new jobs the saved status, whether created through the service or raw SQL", async () => {
+    const viaService = await createJob(alice, { title: "Default status" });
+    expect(viaService.status).toBe("saved");
+    expect((await rowById(viaService.id)).status).toBe("saved");
+
+    const [raw] = await db
+      .insert(jobPosting)
+      .values({ userId: alice.id, title: "Raw", company: "C", description: "D" })
+      .returning();
+    expect(raw.status).toBe("saved");
+  });
+
+  it("lets the owner move a job through every status and bumps updated_at", async () => {
+    const job = await createJob(alice, { title: "Pipeline" });
+    const before = await rowById(job.id);
+
+    for (const status of ["applied", "interviewing", "offered", "rejected", "withdrawn", "saved"]) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const result = await service.updateMyJobStatus(alice, job.id, { status });
+      expect(result).toMatchObject({ ok: true, job: { status } });
+      expect((await rowById(job.id)).status).toBe(status);
+    }
+
+    const after = await rowById(job.id);
+    expect(after.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+    expect(after.createdAt.getTime()).toBe(before.createdAt.getTime());
+    expect({ ...after, status: "x", updatedAt: null }).toEqual({
+      ...before,
+      status: "x",
+      updatedAt: null,
+    });
+  });
+
+  it("never lets another user change a status, and leaves the row byte-identical", async () => {
+    const job = await createJob(alice, { title: "Alice status" });
+    const before = await rowById(job.id);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(await service.updateMyJobStatus(bob, job.id, { status: "offered" })).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+    // Even an invalid status from a non-owner is just "not found".
+    expect(await service.updateMyJobStatus(bob, job.id, { status: "bogus" })).toEqual({
+      ok: false,
+      reason: "not_found",
+    });
+
+    expect(await rowById(job.id)).toEqual(before);
+  });
+
+  it("rejects invalid status values before they reach the database and changes nothing", async () => {
+    const job = await createJob(alice, { title: "Invalid status" });
+    const before = await rowById(job.id);
+
+    for (const bad of [
+      { status: "hired" },
+      { status: "" },
+      {},
+      { status: "applied", userId: bob.id },
+    ]) {
+      const result = await service.updateMyJobStatus(alice, job.id, bad);
+      expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    }
+
+    expect(await rowById(job.id)).toEqual(before);
+  });
+
+  it("only touches the targeted job", async () => {
+    const target = await createJob(alice, { title: "Target status" });
+    const bystander = await createJob(alice, { title: "Bystander status" });
+    const bystanderBefore = await rowById(bystander.id);
+
+    await service.updateMyJobStatus(alice, target.id, { status: "interviewing" });
+
+    expect(await rowById(bystander.id)).toEqual(bystanderBefore);
+  });
+
+  it("answers missing and malformed ids as not found", async () => {
+    for (const id of ["00000000-0000-4000-8000-000000000000", "not-a-uuid"]) {
+      expect(await service.updateMyJobStatus(alice, id, { status: "applied" })).toEqual({
+        ok: false,
+        reason: "not_found",
+      });
+    }
+  });
+
+  it("rejects an invalid status in SQL too (CHECK constraint), on insert and update", async () => {
+    const job = await createJob(alice, { title: "Constraint" });
+
+    await expect(
+      db.update(jobPosting).set({ status: "hired" }).where(eq(jobPosting.id, job.id)),
+    ).rejects.toThrow();
+    await expect(
+      db.insert(jobPosting).values({
+        userId: alice.id,
+        title: "T",
+        company: "C",
+        description: "D",
+        status: "Applied",
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db
+        .update(jobPosting)
+        .set({ status: sql`NULL` })
+        .where(eq(jobPosting.id, job.id)),
+    ).rejects.toThrow();
+    expect((await rowById(job.id)).status).toBe("saved");
+  });
+
+  it("ordinary edits never change the status", async () => {
+    const job = await createJob(alice, { title: "Keeps status" });
+    await service.updateMyJobStatus(alice, job.id, { status: "applied" });
+
+    await service.updateMyJob(alice, job.id, { ...input, title: "Edited, still applied" });
+
+    expect(await rowById(job.id)).toMatchObject({
+      status: "applied",
+      title: "Edited, still applied",
+    });
+  });
+
+  describe("filtering", () => {
+    let dana: { id: string };
+
+    beforeAll(async () => {
+      dana = await createTestUser(db, "job-dana");
+      createdUsers.push(dana.id);
+      const now = Date.now();
+      const statuses = ["applied", "saved", "applied", "rejected", "applied", "saved", "applied"];
+      for (let i = 0; i < 22; i++) {
+        const status = statuses[i % statuses.length];
+        await db.insert(jobPosting).values({
+          userId: dana.id,
+          title: `Dana ${i}`,
+          company: "Acme",
+          description: "D",
+          status,
+          createdAt: new Date(now - i * 60_000),
+        });
+      }
+      await createJob(bob, { title: "Bob applied" });
+      await service.updateMyJobStatus(bob, (await service.listMyJobs(bob, 1, "saved")).jobs[0].id, {
+        status: "applied",
+      });
+    });
+
+    it("returns only matching statuses, newest first, and nothing from other users", async () => {
+      const { jobs } = await service.listMyJobs(dana, 1, "applied");
+
+      expect(jobs.length).toBeGreaterThan(0);
+      expect(jobs.every((job) => job.status === "applied")).toBe(true);
+      const times = jobs.map((job) => job.createdAt.getTime());
+      expect(times).toEqual([...times].sort((a, b) => b - a));
+      expect(jobs.some((job) => job.title.startsWith("Bob"))).toBe(false);
+    });
+
+    it("lists every status when unfiltered", async () => {
+      const { jobs } = await service.listMyJobs(dana, 1);
+      expect(new Set(jobs.map((job) => job.status))).toEqual(
+        new Set(["applied", "saved", "rejected"]),
+      );
+    });
+
+    it("paginates within a filter without skipping or repeating rows", async () => {
+      const total = (
+        await db.select().from(jobPosting).where(eq(jobPosting.userId, dana.id))
+      ).filter((row) => row.status === "applied").length;
+      const seen: string[] = [];
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const result = await service.listMyJobs(dana, page, "applied");
+        seen.push(...result.jobs.map((job) => job.id));
+        hasMore = result.hasMore;
+        page += 1;
+        expect(page).toBeLessThan(10);
+      }
+      expect(seen).toHaveLength(total);
+      expect(new Set(seen).size).toBe(total);
+    });
+
+    it("returns an empty page for a status with no jobs and for a page past the end", async () => {
+      expect((await service.listMyJobs(dana, 1, "offered")).jobs).toEqual([]);
+      expect((await service.listMyJobs(dana, 5, "applied")).jobs).toEqual([]);
+    });
+  });
+});

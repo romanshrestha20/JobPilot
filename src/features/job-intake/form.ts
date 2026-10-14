@@ -60,3 +60,9 @@ export function toFieldErrors(issues: readonly ZodIssue[]): Record<string, strin
   }
   return errors;
 }
+
+/** State of the dedicated status-change form on the job detail page. */
+export type JobStatusFormState =
+  | { status: "idle" }
+  | { status: "success"; message: string }
+  | { status: "error"; message: string };

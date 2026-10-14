@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { JOB_LIMITS, jobInputSchema } from "./validation";
+import {
+  DEFAULT_JOB_STATUS,
+  JOB_LIMITS,
+  JOB_STATUSES,
+  JOB_STATUS_LABELS,
+  jobInputSchema,
+  jobStatusInputSchema,
+  jobStatusSchema,
+  parseJobStatus,
+} from "./validation";
 
 const valid = {
   title: "Backend engineer",
@@ -105,4 +114,69 @@ describe("jobInputSchema", () => {
       expect(parse({ [key]: "x" }).success).toBe(false);
     },
   );
+});
+
+describe("job status", () => {
+  it("has the six statuses in pipeline order, with a label each, defaulting to saved", () => {
+    expect([...JOB_STATUSES]).toEqual([
+      "saved",
+      "applied",
+      "interviewing",
+      "offered",
+      "rejected",
+      "withdrawn",
+    ]);
+    for (const status of JOB_STATUSES) expect(JOB_STATUS_LABELS[status]).toMatch(/^[A-Z]/);
+    expect(DEFAULT_JOB_STATUS).toBe("saved");
+  });
+
+  it.each(JOB_STATUSES)("accepts %s", (status) => {
+    expect(jobStatusSchema.safeParse(status).success).toBe(true);
+    expect(jobStatusInputSchema.safeParse({ status }).success).toBe(true);
+    expect(parseJobStatus(status)).toBe(status);
+  });
+
+  it.each([
+    "",
+    "Saved",
+    "SAVED",
+    " saved",
+    "saved ",
+    "interview",
+    "offer",
+    "hired",
+    "'; drop table job_posting; --",
+    "__proto__",
+    null,
+    undefined,
+    0,
+    {},
+    ["saved"],
+  ])("rejects %j", (value) => {
+    expect(jobStatusSchema.safeParse(value).success).toBe(false);
+    expect(jobStatusInputSchema.safeParse({ status: value }).success).toBe(false);
+    expect(parseJobStatus(value)).toBeUndefined();
+  });
+
+  it("explains how to fix an invalid status", () => {
+    const result = jobStatusInputSchema.safeParse({ status: "nope" });
+    expect(!result.success && result.error.issues[0].message).toMatch(/choose a status/i);
+  });
+
+  it("requires the status key and rejects forged ownership or unknown fields", () => {
+    expect(jobStatusInputSchema.safeParse({}).success).toBe(false);
+    for (const key of ["userId", "id", "createdAt", "updatedAt", "title", "extra"]) {
+      expect(jobStatusInputSchema.safeParse({ status: "applied", [key]: "x" }).success).toBe(false);
+    }
+  });
+
+  it("cannot be set through the create or edit input", () => {
+    const result = jobInputSchema.safeParse({
+      title: "T",
+      company: "C",
+      description: "D",
+      status: "offered",
+    });
+    expect(result.success).toBe(false);
+  });
 });

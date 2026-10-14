@@ -4,6 +4,8 @@ const requireUser = vi.fn();
 const createMyJob = vi.fn();
 const deleteMyJob = vi.fn();
 const updateMyJob = vi.fn();
+const updateMyJobStatus = vi.fn();
+const revalidatePath = vi.fn();
 const redirect = vi.fn((path: string) => {
   throw new Error(`NEXT_REDIRECT:${path}`);
 });
@@ -14,9 +16,11 @@ const notFound = vi.fn(() => {
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect, notFound }));
 vi.mock("@/features/identity/server", () => ({ requireUser }));
-vi.mock("./index", () => ({ createMyJob, deleteMyJob, updateMyJob }));
+vi.mock("next/cache", () => ({ revalidatePath }));
+vi.mock("./index", () => ({ createMyJob, deleteMyJob, updateMyJob, updateMyJobStatus }));
 
-const { createJobAction, deleteJobAction, updateJobAction } = await import("./actions");
+const { createJobAction, deleteJobAction, updateJobAction, updateJobStatusAction } =
+  await import("./actions");
 const { EMPTY_JOB_FORM } = await import("./form");
 
 const idle = { status: "idle", values: EMPTY_JOB_FORM } as const;
@@ -29,7 +33,16 @@ function form(entries: [string, string][]) {
 }
 
 beforeEach(() => {
-  for (const mock of [requireUser, createMyJob, deleteMyJob, updateMyJob, redirect, notFound])
+  for (const mock of [
+    requireUser,
+    createMyJob,
+    deleteMyJob,
+    updateMyJob,
+    updateMyJobStatus,
+    revalidatePath,
+    redirect,
+    notFound,
+  ])
     mock.mockClear();
   requireUser.mockReset();
 });
@@ -183,5 +196,71 @@ describe("updateJobAction", () => {
     // A missing id field is passed on as an empty (invalid) id, never as a guess.
     await expect(updateJobAction(idle, form(fields.slice(1)))).rejects.toThrow("NEXT_NOT_FOUND");
     expect(updateMyJob.mock.calls[1][1]).toBe("");
+  });
+});
+
+describe("updateJobStatusAction", () => {
+  const statusIdle = { status: "idle" } as const;
+  const fields: [string, string][] = [
+    ["id", ID],
+    ["status", "applied"],
+  ];
+
+  it("requires authentication before any update", async () => {
+    requireUser.mockRejectedValue(new Error("NEXT_REDIRECT:/sign-in"));
+    await expect(updateJobStatusAction(statusIdle, form(fields))).rejects.toThrow("/sign-in");
+    expect(updateMyJobStatus).not.toHaveBeenCalled();
+  });
+
+  it("changes the status for the session user, forwards only the status, and refreshes the pages", async () => {
+    const user = { id: "user-alice" };
+    requireUser.mockResolvedValue(user);
+    updateMyJobStatus.mockResolvedValue({ ok: true, job: { id: ID, status: "applied" } });
+
+    const state = await updateJobStatusAction(
+      statusIdle,
+      form([...fields, ["userId", "user-bob"], ["title", "forged"]]),
+    );
+
+    expect(updateMyJobStatus).toHaveBeenCalledWith(user, ID, { status: "applied" });
+    expect(state).toEqual({ status: "success", message: "Status changed to Applied." });
+    expect(revalidatePath).toHaveBeenCalledWith(`/jobs/${ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith("/jobs");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("returns an error message for an invalid status and refreshes nothing", async () => {
+    requireUser.mockResolvedValue({ id: "user-alice" });
+    updateMyJobStatus.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      errors: [{ path: ["status"], message: "Choose a status from the list." }],
+    });
+
+    const state = await updateJobStatusAction(
+      statusIdle,
+      form([
+        ["id", ID],
+        ["status", "hired"],
+      ]),
+    );
+
+    expect(state).toEqual({ status: "error", message: "Choose a status from the list." });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("passes a missing status on as undefined (never a guess) and responds 404 for not found", async () => {
+    requireUser.mockResolvedValue({ id: "user-alice" });
+    updateMyJobStatus.mockResolvedValue({ ok: false, reason: "not_found" });
+
+    await expect(updateJobStatusAction(statusIdle, form([["id", ID]]))).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+    expect(updateMyJobStatus.mock.calls[0][2]).toEqual({ status: undefined });
+    await expect(updateJobStatusAction(statusIdle, form([["status", "applied"]]))).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+    expect(updateMyJobStatus.mock.calls[1][1]).toBe("");
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

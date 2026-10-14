@@ -1,12 +1,12 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { jobPosting } from "./schema";
-import type { JobInput } from "./validation";
+import type { JobInput, JobStatus } from "./validation";
 
 export type JobRecord = typeof jobPosting.$inferSelect;
 export type JobSummaryRecord = Pick<
   JobRecord,
-  "id" | "title" | "company" | "location" | "sourceUrl" | "createdAt"
+  "id" | "title" | "company" | "location" | "sourceUrl" | "status" | "createdAt"
 >;
 
 /**
@@ -15,11 +15,16 @@ export type JobSummaryRecord = Pick<
  */
 export interface JobRepository {
   create(userId: string, data: JobInput): Promise<JobRecord>;
-  /** Newest first, bounded by `limit`/`offset`. */
-  listForUser(userId: string, page: { limit: number; offset: number }): Promise<JobSummaryRecord[]>;
+  /** Newest first, bounded by `limit`/`offset`, optionally only jobs with one `status`. */
+  listForUser(
+    userId: string,
+    page: { limit: number; offset: number; status?: JobStatus },
+  ): Promise<JobSummaryRecord[]>;
   findForUser(userId: string, jobId: string): Promise<JobRecord | null>;
   /** Replaces the editable fields of a job owned by `userId`; null when no such row exists. */
   updateForUser(userId: string, jobId: string, data: JobInput): Promise<JobRecord | null>;
+  /** Sets the application status of a job owned by `userId`; null when no such row exists. */
+  updateStatusForUser(userId: string, jobId: string, status: JobStatus): Promise<JobRecord | null>;
   /** True when a row owned by `userId` was deleted. */
   deleteForUser(userId: string, jobId: string): Promise<boolean>;
 }
@@ -41,7 +46,7 @@ export function createJobRepository(db: PostgresJsDatabase): JobRepository {
       return row;
     },
 
-    async listForUser(userId, { limit, offset }) {
+    async listForUser(userId, { limit, offset, status }) {
       return db
         .select({
           id: jobPosting.id,
@@ -49,10 +54,15 @@ export function createJobRepository(db: PostgresJsDatabase): JobRepository {
           company: jobPosting.company,
           location: jobPosting.location,
           sourceUrl: jobPosting.sourceUrl,
+          status: jobPosting.status,
           createdAt: jobPosting.createdAt,
         })
         .from(jobPosting)
-        .where(eq(jobPosting.userId, userId))
+        .where(
+          status
+            ? and(eq(jobPosting.userId, userId), eq(jobPosting.status, status))
+            : eq(jobPosting.userId, userId),
+        )
         .orderBy(desc(jobPosting.createdAt), desc(jobPosting.id))
         .limit(limit)
         .offset(offset);
@@ -80,6 +90,16 @@ export function createJobRepository(db: PostgresJsDatabase): JobRepository {
           description: data.description,
           updatedAt: sql`now()`,
         })
+        .where(and(eq(jobPosting.id, jobId), eq(jobPosting.userId, userId)))
+        .returning();
+      return row ?? null;
+    },
+
+    async updateStatusForUser(userId, jobId, status) {
+      // Same ownership rule as every other mutation: id AND user_id in the UPDATE itself.
+      const [row] = await db
+        .update(jobPosting)
+        .set({ status, updatedAt: sql`now()` })
         .where(and(eq(jobPosting.id, jobId), eq(jobPosting.userId, userId)))
         .returning();
       return row ?? null;

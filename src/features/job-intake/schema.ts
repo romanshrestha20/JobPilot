@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { user } from "@/lib/schema";
+import { JOB_STATUSES } from "./validation";
 
 // Keep in sync with JOB_LIMITS in validation.ts (the CHECK constraints are the last line of defence).
 export const jobPosting = pgTable(
@@ -16,6 +17,8 @@ export const jobPosting = pgTable(
     location: text("location"),
     sourceUrl: text("source_url"),
     description: text("description").notNull(),
+    // Current application status. Existing and new rows start as "saved".
+    status: text("status").notNull().default("saved"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -39,6 +42,13 @@ export const jobPosting = pgTable(
     check(
       "job_posting_location_length",
       sql`${table.location} IS NULL OR (${table.location} ~ '[^[:space:]]' AND char_length(${table.location}) <= 200)`,
+    ),
+    check(
+      "job_posting_status_allowed",
+      sql`${table.status} IN (${sql.join(
+        JOB_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql.raw(", "),
+      )})`,
     ),
     check(
       "job_posting_source_url_http",

@@ -11,6 +11,7 @@ describe("job form helpers", () => {
         location: null,
         sourceUrl: null,
         description: "D\nE",
+        status: "saved",
         createdAt: new Date(),
         updatedAt: new Date(),
       }),
