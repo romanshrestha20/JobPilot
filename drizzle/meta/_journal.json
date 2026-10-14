@@ -22,6 +22,20 @@
       "when": 1791986431052,
       "tag": "0002_candidate_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792010124309,
+      "tag": "0003_job_posting",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792010195778,
+      "tag": "0004_job_posting_nonblank_checks",
+      "breakpoints": true
     }
   ]
 }

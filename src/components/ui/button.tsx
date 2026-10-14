@@ -17,6 +17,19 @@ const sizes = {
   md: "h-10 px-4",
 } as const;
 
+/** Button styling for non-button elements, e.g. a Next.js `<Link>` that acts as the main action. */
+export function buttonVariants({
+  variant = "primary",
+  size = "md",
+  className,
+}: {
+  variant?: keyof typeof variants;
+  size?: keyof typeof sizes;
+  className?: string;
+} = {}) {
+  return cn(base, variants[variant], sizes[size], className);
+}
+
 export interface ButtonProps extends React.ComponentProps<"button"> {
   /** primary: the one main action of a view. destructive: irreversible removal only. */
   variant?: keyof typeof variants;
@@ -40,7 +53,7 @@ export function Button({
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(base, variants[variant], sizes[size], className)}
+      className={buttonVariants({ variant, size, className })}
       {...props}
     >
       {loading ? <Spinner label="" /> : null}

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 /** All E2E users use this pattern so teardown can remove exactly them. */
 export const E2E_EMAIL_PATTERN = "e2e-%@example.invalid";
@@ -34,4 +34,13 @@ export async function createAccount(request: APIRequestContext, user: TestUser, 
     headers: { origin },
   });
   if (!res.ok()) throw new Error(`Test account setup failed with HTTP ${res.status()}`);
+}
+
+/** Signs in through the API on the page's own context, so the browser holds the session cookie. */
+export async function signInViaApi(page: Page, user: TestUser, origin: string) {
+  const res = await page.request.post("/api/auth/sign-in/email", {
+    data: { email: user.email, password: user.password },
+    headers: { origin },
+  });
+  expect(res.ok()).toBe(true);
 }

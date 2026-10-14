@@ -1,14 +1,14 @@
-import { expect, test } from "./fixtures";
 import type { Page } from "@playwright/test";
-import type { TestUser } from "./support";
+import { expect, test } from "./fixtures";
+import { signInViaApi as signIn } from "./support";
 
-// Signs in through the API on the page's own context, so the browser holds the session cookie.
-async function signIn(page: Page, user: TestUser, origin: string) {
-  const res = await page.request.post("/api/auth/sign-in/email", {
-    data: { email: user.email, password: user.password },
-    headers: { origin },
-  });
-  expect(res.ok()).toBe(true);
+// Clicks Save and waits for the Server Action's response, so a later reload cannot race it.
+async function save(page: Page) {
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/profile")),
+    page.getByRole("button", { name: "Save profile" }).click(),
+  ]);
+  await expect(page.getByText("Profile saved.")).toBeVisible();
 }
 
 test.describe("candidate profile", () => {
@@ -53,12 +53,11 @@ test.describe("candidate profile", () => {
     await signIn(page, registeredUser, origin);
     await page.goto("/profile");
     await page.getByLabel("Headline").fill("First");
-    await page.getByRole("button", { name: "Save profile" }).click();
-    await expect(page.getByText("Profile saved.")).toBeVisible();
+    await save(page);
 
     await page.getByLabel("Headline").fill("Second");
-    await page.getByRole("button", { name: "Save profile" }).click();
-    await expect(page.getByText("Profile saved.")).toBeVisible();
+    // The first "Profile saved." message is still on screen, so wait for the second response itself.
+    await save(page);
 
     await page.reload();
     await expect(page.getByLabel("Headline")).toHaveValue("Second");

@@ -43,6 +43,12 @@ One shared rule, `safeNextPath` in `src/lib/safe-redirect.ts`, used by the proxy
 - The result is rebuilt from the parsed URL, never returned from the raw input. Anything rejected becomes `/`.
 - The proxy keeps the query string when it sends an unauthenticated visitor to `/sign-in?next=…`, so avoid putting secrets in query strings of protected pages.
 
+## Job intake data
+
+- Saved jobs (`job_posting`) are owned by one user. Every list, read and delete query puts the session user's id in the SQL `WHERE` clause; there is no lookup by job id alone. A missing job, someone else's job and a malformed id all render the same not-found page with the same HTTP status. That status is 200, not 404, because the lookup runs inside a Suspense boundary (Cache Components) after the response has started streaming; the page is not indexable and reveals nothing about which ids exist.
+- Input is validated with a strict Zod schema (unknown keys such as `id` and `userId` are rejected). The database repeats the length, non-blank and `http(s)` source-URL rules as CHECK constraints.
+- Job descriptions and links are untrusted. They are rendered as plain text (never as HTML), and the source link is only `http(s)`, opened with `rel="noopener noreferrer nofollow"`. The app never fetches the link.
+
 ## Deployment requirements
 
 - Serve over HTTPS and set `BETTER_AUTH_URL` to the public `https://` origin. Add other approved origins only through `BETTER_AUTH_TRUSTED_ORIGINS`.
