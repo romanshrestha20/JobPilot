@@ -53,7 +53,7 @@ async function JobContent({ params, searchParams }: Props) {
       )}
       <Card>
         <CardContent className="flex flex-col gap-4">
-          <dl className="grid gap-2 text-body-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-4">
+          <dl className="grid gap-2 text-body-sm sm:grid-cols-[auto_1fr] sm:gap-x-4">
             <dt className="text-muted-foreground">Saved</dt>
             <dd>
               {job.createdAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
@@ -61,7 +61,7 @@ async function JobContent({ params, searchParams }: Props) {
             {job.sourceUrl ? (
               <>
                 <dt className="text-muted-foreground">Original posting</dt>
-                <dd className="wrap-anywhere">
+                <dd className="break-all">
                   <a
                     href={job.sourceUrl}
                     target="_blank"
@@ -79,7 +79,7 @@ async function JobContent({ params, searchParams }: Props) {
               Description
             </h2>
             {/* Untrusted text: rendered as plain text (React escapes it), never as HTML. */}
-            <p className="whitespace-pre-wrap wrap-anywhere text-body">{job.description}</p>
+            <p className="whitespace-pre-wrap break-words text-body">{job.description}</p>
           </section>
         </CardContent>
       </Card>

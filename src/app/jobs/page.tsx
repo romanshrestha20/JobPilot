@@ -57,13 +57,13 @@ async function JobsContent({ searchParams }: { searchParams: SearchParams }) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {params.deleted === "1" && <Alert variant="success">Job deleted.</Alert>}
-      <ul className="flex flex-col gap-6">
+      <ul className="flex flex-col gap-4">
         {jobs.map((job) => (
           <li key={job.id}>
             <Card>
-              <CardContent className="flex flex-col gap-1 wrap-anywhere">
+              <CardContent className="flex flex-col gap-1">
                 <h2 className="text-h3">
                   <Link href={`/jobs/${job.id}`} className="underline-offset-4 hover:underline">
                     {job.title}

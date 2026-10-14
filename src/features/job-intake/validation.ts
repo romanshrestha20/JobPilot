@@ -37,10 +37,7 @@ const optionalHttpUrl = z
   .string()
   .trim()
   .max(JOB_LIMITS.sourceUrl, `Link must be at most ${JOB_LIMITS.sourceUrl} characters.`)
-  .refine(
-    (value) => !CONTROL.test(value) && !/\s/.test(value),
-    "Enter a link starting with http:// or https:// and without spaces.",
-  )
+  .refine((value) => !CONTROL.test(value) && !/\s/.test(value), "Enter a valid web address.")
   .refine((value) => {
     if (value === "") return true;
     try {
