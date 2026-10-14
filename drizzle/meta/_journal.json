@@ -36,6 +36,13 @@
       "when": 1792010195778,
       "tag": "0004_job_posting_nonblank_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792012789861,
+      "tag": "0005_job_status",
+      "breakpoints": true
     }
   ]
 }

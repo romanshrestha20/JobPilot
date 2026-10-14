@@ -1,4 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { jobPosting } from "@/features/job-intake/schema";
+import { user as userTable } from "@/lib/schema";
+import { connectTestDatabase } from "@/test/integration-db";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 /** All E2E users use this pattern so teardown can remove exactly them. */
@@ -43,4 +47,53 @@ export async function signInViaApi(page: Page, user: TestUser, origin: string) {
     headers: { origin },
   });
   expect(res.ok()).toBe(true);
+}
+
+export interface SeedJob {
+  title: string;
+  status?: string;
+  /** Minutes before now, so list order is deterministic (smaller = newer). */
+  minutesAgo?: number;
+}
+
+/**
+ * Inserts jobs straight into the guarded test database for a registered test user, so list,
+ * filter and pagination tests do not have to create dozens of jobs through the form.
+ */
+export async function seedJobs(email: string, jobs: SeedJob[]) {
+  const { db, close } = await connectTestDatabase();
+  try {
+    const [owner] = await db
+      .select({ id: userTable.id })
+      .from(userTable)
+      .where(eq(userTable.email, email));
+    if (!owner) throw new Error("seedJobs: test user not found");
+    const now = Date.now();
+    await db.insert(jobPosting).values(
+      jobs.map((job, index) => ({
+        userId: owner.id,
+        title: job.title,
+        company: "Seed Co",
+        description: "Seeded job.",
+        status: job.status ?? "saved",
+        createdAt: new Date(now - (job.minutesAgo ?? index) * 60_000),
+      })),
+    );
+  } finally {
+    await close();
+  }
+}
+
+/** Reads a job's stored status straight from the test database (null when it does not exist). */
+export async function storedJobStatus(jobId: string): Promise<string | null> {
+  const { db, close } = await connectTestDatabase();
+  try {
+    const [row] = await db
+      .select({ status: jobPosting.status })
+      .from(jobPosting)
+      .where(eq(jobPosting.id, jobId));
+    return row?.status ?? null;
+  } finally {
+    await close();
+  }
 }

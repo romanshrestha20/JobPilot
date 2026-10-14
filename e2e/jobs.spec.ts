@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { createAccount, newTestUser, signInViaApi } from "./support";
+import { createAccount, newTestUser, seedJobs, signInViaApi, storedJobStatus } from "./support";
 
 // Next keeps previously visited routes mounted but hidden (Cache Components), so assertions about
 // what the user sees must only consider visible elements after a client-side navigation.
@@ -416,6 +416,277 @@ test.describe("edit job", () => {
         page.getByRole("link", { name: "Cancel" }),
       ]) {
         await control.scrollIntoViewIfNeeded();
+        const box = await control.boundingBox();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(375);
+      }
+    }
+  });
+});
+
+test.describe("application status", () => {
+  const job = { title: "Status job", company: "Acme", description: "Track me." };
+  // The badge is the span right after the section heading (the <option>s share its text).
+  const statusBadge = (page: Page, name: string) =>
+    page.locator("#status-heading + span").filter({ hasText: new RegExp(`^${name}$`) });
+
+  test("new jobs start as Saved, on the detail page and in the list", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    await signInViaApi(page, registeredUser, origin);
+    await addJob(page, job);
+
+    await expect(statusBadge(page, "Saved")).toBeVisible();
+    await page.goto("/jobs");
+    const card = page.locator("li", { hasText: "Status job" });
+    await expect(card.getByText("Saved", { exact: true })).toBeVisible();
+  });
+
+  test("changes Saved to Applied and then Interviewing without leaving the page", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    await signInViaApi(page, registeredUser, origin);
+    const detail = await addJob(page, job);
+    await page.goto(detail);
+
+    await page.getByLabel("Change status").selectOption({ label: "Applied" });
+    await page.getByRole("button", { name: "Update status" }).click();
+    await expect(page.getByText("Status changed to Applied.")).toBeVisible();
+    await expect(statusBadge(page, "Applied")).toBeVisible();
+    await expect(page).toHaveURL(detail);
+
+    await page.getByLabel("Change status").selectOption({ label: "Interviewing" });
+    await page.getByRole("button", { name: "Update status" }).click();
+    await expect(page.getByText("Status changed to Interviewing.")).toBeVisible();
+    await expect(statusBadge(page, "Interviewing")).toBeVisible();
+    await expect(page.getByLabel("Change status")).toHaveValue("interviewing");
+    await expect(page).toHaveURL(detail);
+
+    // The list shows it, and a reload keeps it.
+    await page.goto("/jobs");
+    await expect(
+      page.locator("li", { hasText: "Status job" }).getByText("Interviewing", { exact: true }),
+    ).toBeVisible();
+    await page.goto(detail);
+    await expect(statusBadge(page, "Interviewing")).toBeVisible();
+  });
+
+  test("editing a job does not reset its status", async ({ page, registeredUser, origin }) => {
+    await signInViaApi(page, registeredUser, origin);
+    const detail = await addJob(page, job);
+    await page.goto(detail);
+    await page.getByLabel("Change status").selectOption({ label: "Offered" });
+    await page.getByRole("button", { name: "Update status" }).click();
+    await expect(page.getByText("Status changed to Offered.")).toBeVisible();
+
+    await page.goto(`${detail}/edit`);
+    await page.getByLabel("Job title").fill("Renamed job");
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect(page).toHaveURL(`${detail}?updated=1`);
+    await expect(statusBadge(page, "Offered")).toBeVisible();
+  });
+
+  test("filters the list by status and returns to All", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    await seedJobs(registeredUser.email, [
+      { title: "Alpha saved", status: "saved" },
+      { title: "Beta applied", status: "applied" },
+      { title: "Gamma rejected", status: "rejected" },
+    ]);
+    await signInViaApi(page, registeredUser, origin);
+    await page.goto("/jobs");
+    const filter = page.getByRole("navigation", { name: "Filter by status" });
+    await expect(filter.getByRole("link", { name: "All" })).toHaveAttribute("aria-current", "page");
+    for (const title of ["Alpha saved", "Beta applied", "Gamma rejected"]) {
+      await expect(page.getByRole("link", { name: title })).toBeVisible();
+    }
+
+    await filter.getByRole("link", { name: "Applied" }).click();
+    await expect(page).toHaveURL("/jobs?status=applied");
+    await expect(page.getByRole("link", { name: "Beta applied" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Alpha saved" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Gamma rejected" })).toHaveCount(0);
+    await expect(filter.getByRole("link", { name: "Applied" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    // A status with no jobs says so and offers a way back.
+    await filter.getByRole("link", { name: "Offered" }).click();
+    await expect(page.getByText("No offered jobs")).toBeVisible();
+    await page.getByRole("link", { name: "Show all jobs" }).click();
+    await expect(page).toHaveURL("/jobs");
+    await expect(page.getByRole("link", { name: "Gamma rejected" })).toBeVisible();
+
+    // An unknown filter value is ignored, not an error.
+    await page.goto("/jobs?status=hired");
+    await expect(page.getByRole("link", { name: "Alpha saved" })).toBeVisible();
+    await expect(filter.getByRole("link", { name: "All" })).toHaveAttribute("aria-current", "page");
+  });
+
+  test("keeps the filter across pages and never strands the user on an empty page", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    await seedJobs(registeredUser.email, [
+      ...Array.from({ length: 25 }, (_, i) => ({
+        title: `Applied ${i}`,
+        status: "applied",
+        minutesAgo: i,
+      })),
+      { title: "Saved only", status: "saved", minutesAgo: 100 },
+    ]);
+    await signInViaApi(page, registeredUser, origin);
+    await page.goto("/jobs?status=applied");
+    await expect(page.getByRole("link", { name: /^Applied \d+$/ })).toHaveCount(20);
+
+    const older = page.getByRole("link", { name: "Older" });
+    await expect(older).toHaveAttribute("href", "/jobs?status=applied&page=2");
+    await older.click();
+    await expect(page).toHaveURL("/jobs?status=applied&page=2");
+    await expect(page.getByRole("link", { name: /^Applied \d+$/ })).toHaveCount(5);
+    await expect(page.getByRole("link", { name: "Newer" })).toHaveAttribute(
+      "href",
+      "/jobs?status=applied",
+    );
+
+    // Switching filter from page 2 starts at page 1 of the new filter.
+    await page
+      .getByRole("navigation", { name: "Filter by status" })
+      .getByRole("link", { name: "Saved" })
+      .click();
+    await expect(page).toHaveURL("/jobs?status=saved");
+    await expect(page.getByRole("link", { name: "Saved only" })).toBeVisible();
+
+    // A stale page number for a smaller result set falls back to page 1.
+    await page.goto("/jobs?status=saved&page=7");
+    await expect(page).toHaveURL("/jobs?status=saved");
+    await expect(page.getByRole("link", { name: "Saved only" })).toBeVisible();
+  });
+
+  test("a signed-out visitor is sent to sign-in and back to the filtered list", async ({
+    page,
+    registeredUser,
+  }) => {
+    await page.goto("/jobs?status=applied");
+    await expect(page).toHaveURL(/\/sign-in\?next=%2Fjobs%3Fstatus%3Dapplied$/);
+
+    await page.getByLabel("Email").fill(registeredUser.email);
+    await page.getByLabel("Password").fill(registeredUser.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    await expect(page).toHaveURL("/jobs?status=applied");
+  });
+
+  test("another user cannot change a job's status, even with a forged job id", async ({
+    page,
+    registeredUser,
+    request,
+    origin,
+    allowedConsoleErrors,
+  }) => {
+    // The forged request is answered with a real HTTP 404, which Chrome logs as a console error.
+    allowedConsoleErrors.push("status of 404");
+    await signInViaApi(page, registeredUser, origin);
+    const aliceDetail = await addJob(page, { ...job, title: "Alice status job" });
+    const aliceJobId = aliceDetail.split("/").pop()!;
+
+    const bob = newTestUser();
+    await createAccount(request, bob, origin);
+    await page.context().clearCookies();
+    await signInViaApi(page, bob, origin);
+    const bobDetail = await addJob(page, { ...job, title: "Bob status job" });
+    await page.goto(bobDetail);
+    // Let hydration finish first, or React would restore the hidden field's original value.
+    await page.waitForLoadState("networkidle");
+
+    // Tamper with the hidden id so the form targets Alice's job.
+    await page.evaluate((id) => {
+      (document.querySelector("form input[name=id]") as HTMLInputElement).value = id;
+    }, aliceJobId);
+    await expect(page.locator("form input[name=id]")).toHaveValue(aliceJobId);
+    await page.getByLabel("Change status").selectOption({ label: "Offered" });
+    await page.getByRole("button", { name: "Update status" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "This page could not be found." }),
+    ).toBeVisible();
+    expect(await storedJobStatus(aliceJobId)).toBe("saved");
+
+    // Bob's own job is untouched as well.
+    await page.goto(bobDetail);
+    await expect(statusBadge(page, "Saved")).toBeVisible();
+  });
+
+  test("works by keyboard alone", async ({ page, registeredUser, origin }) => {
+    await seedJobs(registeredUser.email, [{ title: "Keyboard status", status: "saved" }]);
+    await signInViaApi(page, registeredUser, origin);
+    await page.goto("/jobs");
+
+    // Filter links are reachable and activatable with Tab and Enter.
+    const applied = page
+      .getByRole("navigation", { name: "Filter by status" })
+      .getByRole("link", { name: "Saved" });
+    await applied.focus();
+    await expect(applied).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL("/jobs?status=saved");
+
+    await page.getByRole("link", { name: "Keyboard status" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Application status" })).toBeVisible();
+    await expect(page.getByText("Loading job…")).toBeHidden();
+
+    // Select by typing, move to the button with Tab, submit with Enter.
+    await page.getByLabel("Change status").focus();
+    await page.keyboard.type("Applied");
+    await expect(page.getByLabel("Change status")).toHaveValue("applied");
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Update status" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("Status changed to Applied.")).toBeVisible();
+    await expect(statusBadge(page, "Applied")).toBeVisible();
+  });
+
+  test("fits a phone screen in both themes", async ({ page, registeredUser, origin }) => {
+    await seedJobs(registeredUser.email, [
+      { title: "Responsive job", status: "interviewing" },
+      { title: "Other job", status: "withdrawn" },
+    ]);
+    await signInViaApi(page, registeredUser, origin);
+    await page.setViewportSize({ width: 375, height: 812 });
+
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.goto("/jobs");
+      await expect(page.getByRole("link", { name: "Responsive job" })).toBeVisible();
+      await page.getByRole("link", { name: "Responsive job" }).click();
+      await expect(page.getByLabel("Change status")).toBeVisible();
+
+      for (const path of ["/jobs", page.url()]) {
+        await page.goto(path);
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        expect(scrollWidth, `${path} scrolls horizontally (${colorScheme})`).toBeLessThanOrEqual(
+          clientWidth,
+        );
+      }
+      for (const control of [
+        page.getByLabel("Change status"),
+        page.getByRole("button", { name: "Update status" }),
+      ]) {
         const box = await control.boundingBox();
         expect(box!.x).toBeGreaterThanOrEqual(0);
         expect(box!.x + box!.width).toBeLessThanOrEqual(375);

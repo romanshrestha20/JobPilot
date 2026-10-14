@@ -16,8 +16,9 @@ Integration and E2E tests only run against a local database whose name ends in `
 - `playwright.config.ts` builds the app into `.next-e2e` (so a running `pnpm dev` is not disturbed) and serves it on port 3100 with `DATABASE_URL` pointing at the test database. It never reuses an already-running server on that port.
 - Each test creates its own user (`e2e-<uuid>@example.invalid`) and sends its own random `x-forwarded-for`, so the sign-in and sign-up rate limits stay enabled and tests do not share a bucket. Teardown deletes those users.
 - Every test fails on browser `console.error` output or uncaught page errors (except the expected failed `/api/auth/*` request when testing a wrong password).
-- Covered: sign-up, sign-in (wrong password, protected-page return, unsafe `?next=`), origin rejection and throttling on the real server, saving, reloading, validating and isolating the candidate profile, and the job-intake flow (add, list, detail, validation errors, cross-user 404, delete, edit).
+- Covered: sign-up, sign-in (wrong password, protected-page return, unsafe `?next=`), origin rejection and throttling on the real server, saving, reloading, validating and isolating the candidate profile, and the job-intake flow (add, list, detail, validation errors, cross-user 404, delete, edit, status change, status filter and pagination).
 - After a client-side navigation Next keeps earlier routes mounted but hidden, so assertions that something is gone must filter on `{ visible: true }`.
+- `seedJobs()` and `storedJobStatus()` in `e2e/support.ts` write and read the guarded test database directly, for list, filter and pagination setup and for checking that a forged request changed nothing. A test that expects the browser to log an error (for example the 404 of a forged Server Action) lists it in `allowedConsoleErrors`.
 - Not covered: dark theme and responsive layouts, keyboard and focus behavior, visual regression, HTTPS, and anything other than Chromium.
 
 On failure, traces and screenshots are written to `test-results/` (git-ignored); open a trace with `pnpm exec playwright show-trace <trace.zip>`.

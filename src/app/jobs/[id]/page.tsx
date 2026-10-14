@@ -7,7 +7,7 @@ import { PageShell } from "@/components/layout/page-shell";
 import { Alert } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { DeleteJobForm, getMyJob } from "@/features/job-intake";
+import { DeleteJobForm, JobStatusBadge, JobStatusForm, getMyJob } from "@/features/job-intake";
 import { requireUser } from "@/features/identity/server";
 
 export const metadata = { title: "Job · JobPilot" };
@@ -58,6 +58,15 @@ async function JobContent({ params, searchParams }: Props) {
       )}
       <Card>
         <CardContent className="flex flex-col gap-4">
+          <section aria-labelledby="status-heading" className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 id="status-heading" className="text-h3">
+                Application status
+              </h2>
+              <JobStatusBadge status={job.status} />
+            </div>
+            <JobStatusForm jobId={job.id} status={job.status} />
+          </section>
           <dl className="grid gap-2 text-body-sm sm:grid-cols-[auto_1fr] sm:gap-x-4">
             <dt className="text-muted-foreground">Saved</dt>
             <dd>

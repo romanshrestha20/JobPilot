@@ -1,0 +1,2 @@
+ALTER TABLE "job_posting" ADD COLUMN "status" text DEFAULT 'saved' NOT NULL;--> statement-breakpoint
+ALTER TABLE "job_posting" ADD CONSTRAINT "job_posting_status_allowed" CHECK ("job_posting"."status" IN ('saved', 'applied', 'interviewing', 'offered', 'rejected', 'withdrawn'));
