@@ -3,121 +3,76 @@
 /*
  * JobPilot design tokens. Source of truth: docs/DESIGN.md.
  *
- * Light values live on :root. Dark values apply when the OS prefers dark,
- * unless <html data-theme="light"> forces light; <html data-theme="dark">
- * forces dark. The dark block therefore appears twice; keep both in sync.
+ * Every colour token is defined once as light-dark(<light>, <dark>). Which side applies follows
+ * `color-scheme`: the OS preference by default, or <html data-theme="light|dark"> to force one.
+ * That also themes native controls (select popups, scrollbars, form widgets).
  * Components use only the semantic utilities below (bg-card, text-muted-foreground…),
- * never `dark:` variants or raw palette colors.
+ * never `dark:` variants or raw palette colours.
  */
 
 :root {
-  --background: #f6f7f5;
-  --foreground: #14191c;
-  --card: #ffffff;
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --background: light-dark(#faf5ef, #191a1e); /* Warm Ivory / Night Ink */
+  --foreground: light-dark(#292a30, #f4ede5); /* Charcoal / Ivory Text */
+  --card: light-dark(#fffcf8, #25252a); /* Graphite in dark */
   --card-foreground: var(--foreground);
-  --popover: #ffffff;
+  --popover: light-dark(#fffcf8, #2b2b31);
   --popover-foreground: var(--foreground);
-  --primary: #0c6a56;
-  --primary-foreground: #ffffff;
-  --secondary: #eaedea;
+
+  /* Brand */
+  --primary: light-dark(#b65d45, #d47a60); /* Muted Copper / Copper Glow: fills and focus ring */
+  --primary-foreground: light-dark(#ffffff, #191a1e);
+  --primary-strong: light-dark(#9a4a34, #e08c74); /* primary-coloured text and button hover */
+  --secondary: light-dark(#e8d8c7, #303037); /* Linen */
   --secondary-foreground: var(--foreground);
-  --muted: #eaedea;
-  --muted-foreground: #566066;
-  --accent: #dff0e9;
-  --accent-foreground: #0a4a3c;
-  --destructive: #b3261e;
-  --destructive-foreground: #ffffff;
-  --border: #dbe0dc;
-  --input: #848d92;
+  --muted: light-dark(#f2e9df, #2a2a30);
+  --muted-foreground: light-dark(#5f564e, #b0a79d);
+  --accent: light-dark(#f3e6c0, #3a3220); /* soft Antique Gold ground for hover and selection */
+  --accent-foreground: light-dark(#5a4510, #e1c477);
+  --beacon: light-dark(#d6b45a, #e1c477); /* Antique Gold / Soft Gold: AI only */
+  --beacon-foreground: light-dark(#292a30, #191a1e);
+
+  /* Controls and lines */
+  --border: light-dark(#e8d8c7, #3a3a42); /* decorative hairlines */
+  --input: light-dark(#8a7b6e, #8e8e98); /* control borders, 3:1 on card and background */
   --ring: var(--primary);
-  --beacon: #9a5200;
-  --beacon-soft: #fbeed6;
-  --beacon-foreground: #ffffff;
-  --success: #16723a;
-  --success-soft: #e1f3e7;
-  --warning: #8a5a00;
-  --warning-soft: #fbf0d4;
-  --info: #1d5fb8;
-  --info-soft: #e3edfb;
-  --danger-soft: #fbe5e3;
+
+  /* Feedback (each is also paired with a word or icon, never colour alone) */
+  --destructive: light-dark(#ad1f33, #ff8a93);
+  --destructive-foreground: light-dark(#ffffff, #2b0709);
+  --danger-soft: light-dark(#fbe3e4, #40171c);
+  --success: light-dark(#16723a, #5fcf86);
+  --success-soft: light-dark(#e1f3e7, #14301f);
+  --warning: light-dark(#8a5a00, #e8b84a);
+  --warning-soft: light-dark(#fbf0d4, #2f2610);
+  --info: light-dark(#1d5fb8, #7ab0f5);
+  --info-soft: light-dark(#e3edfb, #15253c);
+
+  /* Domain: pipeline statuses and match score bands (no screen consumes these yet) */
   --status-saved: var(--muted-foreground);
   --status-applied: var(--info);
-  --status-interview: var(--primary);
+  --status-interview: var(--primary-strong);
   --status-offer: var(--success);
   --status-rejected: var(--destructive);
-  --match-high: var(--primary);
+  --match-high: var(--primary-strong);
   --match-mid: var(--warning);
   --match-low: var(--muted-foreground);
-  --match-track: #e3e7e4;
-  --elevation-sm: 0 1px 2px rgba(20, 25, 28, 0.06);
-  --elevation-md: 0 8px 24px rgba(20, 25, 28, 0.1), 0 2px 6px rgba(20, 25, 28, 0.06);
+
+  /* Elevation and shape */
+  --elevation-sm: 0 1px 2px light-dark(rgb(41 42 48 / 0.08), rgb(0 0 0 / 0.4));
+  --elevation-md:
+    0 8px 24px light-dark(rgb(41 42 48 / 0.12), rgb(0 0 0 / 0.5)),
+    0 2px 6px light-dark(rgb(41 42 48 / 0.08), rgb(0 0 0 / 0.4));
   --radius: 12px;
+}
+
+:root[data-theme="light"] {
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --background: #0d1113;
-    --foreground: #e7eae8;
-    --card: #151b1e;
-    --popover: #1b2226;
-    --primary: #46c4a0;
-    --primary-foreground: #04241c;
-    --secondary: #212a2e;
-    --muted: #1c2427;
-    --muted-foreground: #99a4a9;
-    --accent: #14322a;
-    --accent-foreground: #9be6cd;
-    --destructive: #f07167;
-    --destructive-foreground: #2b0705;
-    --border: #283135;
-    --input: #66717a;
-    --beacon: #f2ad4e;
-    --beacon-soft: #33250f;
-    --beacon-foreground: #2a1700;
-    --success: #5fcf86;
-    --success-soft: #14301f;
-    --warning: #e8b84a;
-    --warning-soft: #2f2610;
-    --info: #7ab0f5;
-    --info-soft: #15253c;
-    --danger-soft: #3a1513;
-    --match-track: #283135;
-    --elevation-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --elevation-md: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
-    color-scheme: dark;
-  }
-}
-
 :root[data-theme="dark"] {
-  --background: #0d1113;
-  --foreground: #e7eae8;
-  --card: #151b1e;
-  --popover: #1b2226;
-  --primary: #46c4a0;
-  --primary-foreground: #04241c;
-  --secondary: #212a2e;
-  --muted: #1c2427;
-  --muted-foreground: #99a4a9;
-  --accent: #14322a;
-  --accent-foreground: #9be6cd;
-  --destructive: #f07167;
-  --destructive-foreground: #2b0705;
-  --border: #283135;
-  --input: #66717a;
-  --beacon: #f2ad4e;
-  --beacon-soft: #33250f;
-  --beacon-foreground: #2a1700;
-  --success: #5fcf86;
-  --success-soft: #14301f;
-  --warning: #e8b84a;
-  --warning-soft: #2f2610;
-  --info: #7ab0f5;
-  --info-soft: #15253c;
-  --danger-soft: #3a1513;
-  --match-track: #283135;
-  --elevation-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --elevation-md: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
 
@@ -130,6 +85,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-strong: var(--primary-strong);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -142,7 +98,6 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-beacon: var(--beacon);
-  --color-beacon-soft: var(--beacon-soft);
   --color-beacon-foreground: var(--beacon-foreground);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
@@ -159,7 +114,6 @@
   --color-match-high: var(--match-high);
   --color-match-mid: var(--match-mid);
   --color-match-low: var(--match-low);
-  --color-match-track: var(--match-track);
 
   --font-sans: var(--font-geist-sans), "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -205,6 +159,8 @@
 @layer base {
   * {
     @apply border-border;
+    /* Fixed colour, so a focus ring never animates in from currentColor (transition-colors). */
+    outline-color: var(--ring);
   }
   body {
     @apply bg-background text-foreground font-sans text-body antialiased;

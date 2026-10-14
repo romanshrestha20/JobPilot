@@ -28,7 +28,25 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    // Optional (`E2E_ALL_BROWSERS=1`, after `playwright install firefox webkit`): the theme and
+    // contrast checks in other engines. Not part of the default run or CI.
+    ...(process.env.E2E_ALL_BROWSERS
+      ? [
+          {
+            name: "firefox",
+            testMatch: /design-system\.spec\.ts/,
+            use: { ...devices["Desktop Firefox"] },
+          },
+          {
+            name: "webkit",
+            testMatch: /design-system\.spec\.ts/,
+            use: { ...devices["Desktop Safari"] },
+          },
+        ]
+      : []),
+  ],
   webServer: {
     // Production build in a separate directory (see next.config.ts) so it never clobbers `next dev`.
     command: `pnpm exec next build && pnpm exec next start -p ${PORT}`,

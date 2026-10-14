@@ -694,3 +694,139 @@ test.describe("application status", () => {
     }
   });
 });
+
+test.describe("long text", () => {
+  const unbroken = (char: string, length: number) => char.repeat(length);
+  const LONG = {
+    title: unbroken("T", 190),
+    company: "International Consolidated Holdings and Industrial Software Solutions Group "
+      .repeat(2)
+      .trim(),
+    location: unbroken("L", 190),
+    url: `https://example.com/careers/${"segment-".repeat(60)}?ref=${"x".repeat(200)}`,
+    description: `${unbroken("D", 480)}\n\n${"A long paragraph with ordinary words. ".repeat(40)}\n\n    indented line`,
+  };
+
+  // Streamed content first sits in a hidden container until React swaps it in, so wait for
+  // toBeVisible() (not just text) before measuring; hidden elements have no layout.
+
+  /** Fails on horizontal page scroll, on any visible element sticking out of the viewport, and on any text element that clips its own content. */
+  async function expectNothingOverflowsOrClips(page: Page, label: string) {
+    const problems = await page.evaluate(() => {
+      const viewport = document.documentElement.clientWidth;
+      const found: string[] = [];
+      if (document.documentElement.scrollWidth > viewport) {
+        found.push(
+          `page scrolls horizontally (${document.documentElement.scrollWidth} > ${viewport})`,
+        );
+      }
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *"))) {
+        const box = el.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0) continue;
+        const where = `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)}`;
+        if (box.right > viewport + 1 || box.left < -1)
+          found.push(`${where} sticks out (right=${Math.round(box.right)})`);
+        const style = getComputedStyle(el);
+        const clips = style.overflowX !== "visible" && el.scrollWidth > el.clientWidth + 1;
+        const isFormControl =
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLTextAreaElement ||
+          el instanceof HTMLSelectElement;
+        if (clips && !isFormControl) found.push(`${where} clips its content`);
+      }
+      return found.slice(0, 5);
+    });
+    expect(problems, label).toEqual([]);
+  }
+
+  test("job cards, detail and edit pages hold long titles, companies, locations, links and descriptions", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    await signInViaApi(page, registeredUser, origin);
+    const detail = await addJob(page, {
+      title: LONG.title,
+      company: LONG.company,
+      location: LONG.location,
+      url: LONG.url,
+      description: LONG.description,
+    });
+
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 375, height: 812 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const at = `${viewport.width}px`;
+
+      // List: wait for the streamed card, not just the heading in the static shell.
+      await page.goto("/jobs");
+      await expect(page.locator("h2 a").first()).toBeVisible();
+      await expect(page.locator("h2 a").first()).toHaveText(LONG.title);
+      await expect(page.locator("li").first()).toContainText(LONG.company);
+      await expect(page.locator("li").first()).toContainText(LONG.location);
+      await expectNothingOverflowsOrClips(page, `/jobs at ${at}`);
+
+      // Detail: every long value is fully present (wrapped, not truncated).
+      await page.goto(detail);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(LONG.title);
+      await expect(page.getByText(LONG.url, { exact: true })).toBeVisible();
+      await expect(page.locator("section", { hasText: "Description" }).locator("p")).toHaveText(
+        LONG.description,
+      );
+      await expectNothingOverflowsOrClips(page, `detail at ${at}`);
+
+      // Edit: header text wraps and the inputs still hold the complete values.
+      await page.goto(`${detail}/edit`);
+      await expect(page.getByRole("heading", { level: 1, name: "Edit job" })).toBeVisible();
+      await expect(page.getByLabel("Job title")).toHaveValue(LONG.title);
+      await expect(page.getByLabel("Company")).toHaveValue(LONG.company);
+      await expect(page.getByLabel("Location (optional)")).toHaveValue(LONG.location);
+      await expect(page.getByLabel("Original posting link (optional)")).toHaveValue(LONG.url);
+      await expect(page.getByLabel("Job description")).toHaveValue(LONG.description);
+      await expectNothingOverflowsOrClips(page, `edit at ${at}`);
+    }
+  });
+
+  test("a long server error message and long values in a failed form stay inside the page", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    await signInViaApi(page, registeredUser, origin);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/jobs/new");
+    await page.evaluate(() => {
+      document.querySelector("form")!.noValidate = true;
+    });
+    await fillJob(page, {
+      title: "   ",
+      company: LONG.company,
+      location: LONG.location,
+      url: LONG.url.replace("https://", "ftp://"),
+      description: LONG.description,
+    });
+    await page.getByRole("button", { name: "Save job" }).click();
+    await expect(page.getByText("Please fix the highlighted fields.")).toBeVisible();
+    await expect(page.getByLabel("Company")).toHaveValue(LONG.company);
+    await expectNothingOverflowsOrClips(page, "failed form at 375px");
+  });
+
+  test("a long status or filter context does not break the list at phone width", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    await seedJobs(registeredUser.email, [
+      { title: LONG.title, status: "interviewing" },
+      { title: LONG.company, status: "withdrawn" },
+    ]);
+    await signInViaApi(page, registeredUser, origin);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/jobs?status=interviewing");
+    await expect(page.locator("h2 a").first()).toBeVisible();
+    await expect(page.locator("h2 a").first()).toHaveText(LONG.title);
+    await expectNothingOverflowsOrClips(page, "filtered list at 375px");
+  });
+});
