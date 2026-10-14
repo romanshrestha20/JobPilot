@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DeleteJobForm, JobStatusBadge, JobStatusForm, getMyJob } from "@/features/job-intake";
 import { requireUser } from "@/features/identity/server";
+import { linkClass } from "@/components/ui/link";
 
 export const metadata = { title: "Job · JobPilot" };
 
@@ -67,7 +68,7 @@ async function JobContent({ params, searchParams }: Props) {
             </div>
             <JobStatusForm jobId={job.id} status={job.status} />
           </section>
-          <dl className="grid gap-2 text-body-sm sm:grid-cols-[auto_1fr] sm:gap-x-4">
+          <dl className="grid gap-2 text-body-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-4">
             <dt className="text-muted-foreground">Saved</dt>
             <dd>
               {job.createdAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
@@ -83,12 +84,12 @@ async function JobContent({ params, searchParams }: Props) {
             {job.sourceUrl ? (
               <>
                 <dt className="text-muted-foreground">Original posting</dt>
-                <dd className="break-all">
+                <dd className="wrap-anywhere">
                   <a
                     href={job.sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer nofollow"
-                    className="font-medium text-primary underline underline-offset-4"
+                    className={linkClass}
                   >
                     {job.sourceUrl}
                   </a>
@@ -101,7 +102,7 @@ async function JobContent({ params, searchParams }: Props) {
               Description
             </h2>
             {/* Untrusted text: rendered as plain text (React escapes it), never as HTML. */}
-            <p className="whitespace-pre-wrap break-words text-body">{job.description}</p>
+            <p className="whitespace-pre-wrap wrap-anywhere text-body">{job.description}</p>
           </section>
         </CardContent>
       </Card>

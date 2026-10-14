@@ -11,6 +11,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { linkClass } from "@/components/ui/link";
 
 // useSearchParams needs a Suspense boundary under Cache Components.
 export default function SignInPage() {
@@ -51,10 +52,7 @@ function SignInContent() {
       footer={
         <>
           Don&apos;t have an account?{" "}
-          <Link
-            href={withNext("/sign-up", next)}
-            className="font-medium text-primary underline underline-offset-4"
-          >
+          <Link href={withNext("/sign-up", next)} className={linkClass}>
             Sign up
           </Link>
         </>

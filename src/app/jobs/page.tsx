@@ -130,7 +130,7 @@ async function JobsContent({ searchParams }: { searchParams: SearchParams }) {
         {jobs.map((job) => (
           <li key={job.id}>
             <Card>
-              <CardContent className="flex flex-col gap-1">
+              <CardContent className="flex flex-col gap-1 wrap-anywhere">
                 <h2 className="text-h3">
                   <Link href={`/jobs/${job.id}`} className="underline-offset-4 hover:underline">
                     {job.title}
