@@ -112,7 +112,7 @@ Existing shared files include:
 - `src/lib/db.ts`: database client.
 - `src/lib/schema.ts`: Better Auth tables.
 - `src/lib/auth.ts`: Better Auth server configuration.
-- `src/lib/auth-client.ts`: Better Auth browser client.
+- `src/components/auth/auth-client.ts`: Better Auth browser client (client-only, so it lives outside `lib/`).
 - `src/lib/env.ts`: environment validation.
 
 As capabilities are implemented, shared infrastructure may be added under `src/lib/ai/`, `src/lib/storage/`, or similarly focused paths. Avoid speculative abstractions.

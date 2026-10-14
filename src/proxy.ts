@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionCookie } from "better-auth/cookies";
 
 const PUBLIC_PATHS = ["/sign-in", "/sign-up"];
 const AUTH_API_PREFIX = "/api/auth";
@@ -13,8 +14,8 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionCookie = request.cookies.get("better-auth.session_token");
-  const isAuthenticated = !!sessionCookie?.value;
+  // Handles the __Secure- cookie prefix used over HTTPS.
+  const isAuthenticated = !!getSessionCookie(request);
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   // Signed-in user hitting auth pages → send home
