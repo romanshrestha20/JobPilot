@@ -2,23 +2,23 @@
 
 This document designs the first AI feature: analysing a saved job and measuring how much of its stated requirements a candidate's profile covers. It extends section 9 of `docs/architecture.md` and the rules in `AGENTS.md`.
 
-**Status: design only.** Nothing described here as _planned_ exists in the repository yet. What exists today is listed in section 1. Re-check the source before relying on any claim; the repository is the source of truth.
+**Status: Phase 2A (AI gateway, providers, requirements extraction and grounding) is implemented. Everything else is design only.** Anything described as _planned_ does not exist yet; section 4.3 lists what Phase 2A delivers and what was validated. What exists today is listed in section 1. Re-check the source before relying on any claim; the repository is the source of truth.
 
 Related documents: `docs/architecture.md` (system and module boundaries), `docs/security.md` (AI security section), `docs/decisions/0001-pg-boss.md` (queue decision), `docs/testing.md` (test conventions).
 
 ## 1. What exists and what does not
 
-| Area                                                                                              | State today                                                                                                            | Evidence                                                                 |
-| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Configuration names `OLLAMA_URL`, `LLM_PROVIDER` (`ollama` or `demo`), `LLM_MODEL`, `EMBED_MODEL` | Validated, never read by any code                                                                                      | `src/lib/env.ts`; no other file references them                          |
-| AI gateway, prompts, provider clients, `demo` provider                                            | Not implemented                                                                                                        | no `src/lib/ai/`                                                         |
-| Queue, worker, pg-boss                                                                            | Not implemented                                                                                                        | no dependency in `package.json`                                          |
-| Candidate skills                                                                                  | Implemented: name, optional level, years and evidence, at most 50 per user, one per lowercase key; no alias dictionary | `candidate_skill` in `src/features/candidate-profile/`, migration `0006` |
-| Job analysis, requirements, scoring                                                               | Not implemented                                                                                                        | no matching code                                                         |
-| pgvector                                                                                          | Extension enabled only; no vector columns                                                                              | `drizzle/0000_enable-pgvector.sql`                                       |
-| Local Ollama                                                                                      | Reachable, but only the embedding model `bge-m3` is pulled; no chat model                                              | checked with `GET /api/tags` during the audit                            |
-| Candidate profile                                                                                 | Implemented: headline, summary, location (free text), years of experience, languages, work modes                       | `src/features/candidate-profile/`                                        |
-| Job postings                                                                                      | Implemented: title, company, location (free text), source URL, description up to 20,000 characters, application status | `src/features/job-intake/`                                               |
+| Area                                                                                              | State today                                                                                                                                 | Evidence                                                                 |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Configuration names `OLLAMA_URL`, `LLM_PROVIDER` (`ollama` or `demo`), `LLM_MODEL`, `EMBED_MODEL` | Validated and read by `src/lib/ai` (Phase 2A); `EMBED_MODEL` is still unused                                                                | `src/lib/env.ts`; no other file references them                          |
+| AI gateway, `ollama` and `demo` providers, requirements extraction                                | Implemented (Phase 2A); nothing calls it from the application yet                                                                           | `src/lib/ai/`, `src/features/job-analysis/`                              |
+| Queue, worker, pg-boss                                                                            | Not implemented                                                                                                                             | no dependency in `package.json`                                          |
+| Candidate skills                                                                                  | Implemented: name, optional level, years and evidence, at most 50 per user, one per lowercase key; no alias dictionary                      | `candidate_skill` in `src/features/candidate-profile/`, migration `0006` |
+| Persistence, UI, scoring                                                                          | Not implemented (extraction only)                                                                                                           | no `job_analysis` table, no analysis UI, no scoring code                 |
+| pgvector                                                                                          | Extension enabled only; no vector columns                                                                                                   | `drizzle/0000_enable-pgvector.sql`                                       |
+| Local Ollama                                                                                      | Reachable (v0.40.3 when checked 2026-10-15), but only the embedding model `bge-m3` is pulled; no chat model. No real inference has been run | checked with `GET /api/tags` during the audit                            |
+| Candidate profile                                                                                 | Implemented: headline, summary, location (free text), years of experience, languages, work modes                                            | `src/features/candidate-profile/`                                        |
+| Job postings                                                                                      | Implemented: title, company, location (free text), source URL, description up to 20,000 characters, application status                      | `src/features/job-intake/`                                               |
 
 The first version does **not** use embeddings or semantic search. pgvector stays unused.
 
@@ -50,15 +50,15 @@ Job detail page (user clicks Analyse)
 
 Extraction happens once per job text. Scoring runs when the page is read, against the current profile, so a profile change is reflected immediately and nothing about the profile is stored in the analysis. (Whether to also persist a match result is an open decision; see section 13.)
 
-## 4. AI gateway (planned: `src/lib/ai/`)
+## 4. AI gateway (implemented in Phase 2A: `src/lib/ai/`)
 
 All model calls go through one gateway. Feature modules never create provider clients or call provider endpoints.
 
-- **Typed task functions.** The first is `extractJobRequirements({ title, company, description })`, returning either a `JobRequirements` object or a typed error. A later phase may add `explainMatch`; it is out of scope for the first version (section 7.9).
+- **Typed task functions.** The first is `extractRequirements(gateway, jobText)` in `src/features/job-analysis/application/extract.ts`, returning grounded requirements or a typed error. It takes the job text only. A later phase may add `explainMatch`; it is out of scope for the first version (section 7.9).
 - **Provider selection** by validated configuration (`LLM_PROVIDER`).
 - **Framework-free.** `src/lib` code may not import Next.js or React (ESLint rule in `eslint.config.mjs`). The gateway uses `fetch` and Zod only.
-- **Timeouts and cancellation.** Every call has an `AbortSignal` timeout (planned setting `LLM_TIMEOUT_MS`, proposed default 60 000 ms). Retries are owned by the queue, not by the gateway, so there is one retry policy.
-- **Prompts are versioned files** (for example `prompts/extract-job-requirements.v1.ts`) separate from business rules. The prompt version is stored with every analysis.
+- **Timeouts and cancellation.** Every call has an `AbortSignal` timeout (`LLM_TIMEOUT_MS`, default 60 000 ms, allowed range 1 000 to 300 000). Retries are owned by the queue, not by the gateway, so there is one retry policy.
+- **Prompts are versioned** (`PROMPT_VERSION = "extract-job-requirements.v1"` in `domain/prompt.ts`) and separate from business rules. The prompt version is returned with every extraction; storing it is Phase 2B.
 - **Safe operational metadata only:** task, provider, model, prompt version, latency, outcome code. Never prompt text, job text or model output.
 
 ### 4.1 Providers
@@ -88,6 +88,71 @@ An extraction that is valid but yields nothing usable is **not** an error: it is
 | `too_long`             | Description exceeds what the provider context can hold | No (permanent)                                      |
 
 Provider error bodies are never shown to users or stored; only the code is.
+
+### 4.3 Phase 2A status
+
+**Implemented and unit-tested** (no database, no network, no model):
+
+| Component                                                                                                                                                        | Files                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Provider contract and typed errors (`provider_unavailable`, `model_unavailable`, `timeout`, `invalid_output`, `too_long`)                                        | `src/lib/ai/types.ts`, `errors.ts`                                    |
+| Gateway: input limit, timeout (also for providers that ignore the signal), Zod validation, no retry, no repair, no fallback                                      | `src/lib/ai/gateway.ts`                                               |
+| Ollama provider (`/api/chat`, `stream: false`, temperature 0, `num_ctx` 8192, `format` from `z.toJSONSchema`, response cap 64 000 characters, redirects refused) | `src/lib/ai/ollama-provider.ts`                                       |
+| Demo provider and provider factory (refuses demo in production, never substitutes a provider)                                                                    | `demo-provider.ts`, `factory.ts`                                      |
+| Server-only composition root                                                                                                                                     | `src/lib/ai/index.ts`                                                 |
+| Environment rules (`LLM_MODEL` only for ollama, demo rejected in production, `LLM_TIMEOUT_MS`)                                                                   | `src/lib/env-schema.ts` (`env.ts` parses with it)                     |
+| Allowlist logger                                                                                                                                                 | `src/lib/log.ts`                                                      |
+| `JobRequirements` v1 schema, starter dictionary `skills-v1` (about 45 skills), prompt with a text-derived boundary, grounding, demo extractor                    | `src/features/job-analysis/domain/`                                   |
+| `extractRequirements(gateway, jobText)`                                                                                                                          | `src/features/job-analysis/application/extract.ts`                    |
+| Fixtures and evaluation                                                                                                                                          | `fixtures.ts`, `evaluation.ts`, `scripts/ai-eval.ts` (`pnpm ai:eval`) |
+
+**Still planned (Phase 2B and later):** `job_analysis` persistence, ownership checks and rate limits, pg-boss and the worker, server actions, the Match UI, scoring (`match-v1`), the candidate-to-requirement comparison and its use of Candidate Skills. `extractJobRequirements` in `src/features/job-analysis/index.ts` is wired to the configured provider but has no caller yet.
+
+**Grounding in Phase 2A** applies to every claim, not only skills. A skill needs its `quote` in the job text **and the quote must name the skill** (its name or a dictionary spelling, as a whole word), so a real sentence attached to an unrelated skill is dropped; minimum years must appear as a "N years" phrase (digits or number words); a language or location must appear as a whole word; a work mode needs one of its keywords. Anything else is removed and counted in `droppedUngrounded`.
+
+**Validated against a real model: nothing.** Ollama 0.40.3 is installed with only `bge-m3`, which cannot chat, so no inference was run. The request format (`format` as a JSON Schema, `stream: false`, `options.temperature`, `options.num_ctx`) is the documented `/api/chat` shape but is unconfirmed against this installation. Zod 4.6.5 `z.toJSONSchema(schema, { target: "draft-7" })` was checked to emit a strict schema (`additionalProperties: false`, bounds, nullable unions). The first step of real-model validation is `pnpm ai:eval --provider ollama` after pulling a model.
+
+**Model configuration.** Recommended local chat model: Qwen 2.5 7B Instruct (about 4.7 GB at the default 4-bit quantization; the machine used for this work has 16 GB of RAM). The tag below was not pulled or verified here:
+
+```text
+ollama pull qwen2.5:7b-instruct
+```
+
+then set `LLM_PROVIDER=ollama` and `LLM_MODEL=qwen2.5:7b-instruct`. The provider requests a context of 8 192 tokens; see "Long inputs" below for why that may be too small for some 20 000-character postings.
+
+**Long inputs (measured with a proxy, not with Qwen).** The job description limit is 20 000 characters, but `num_ctx` is 8 192 tokens and the prompt and the answer share it. No Qwen model is installed, so its tokenizer could not be used. The installed `bge-m3` model reports `prompt_eval_count`, which gave these token counts for 20 000-character samples (a different tokenizer, so only an indication):
+
+| Sample (20 000 characters unless noted) | Tokens (bge-m3) | Characters per token |
+| --------------------------------------- | --------------- | -------------------- |
+| English prose                           | about 4 300     | 4.6                  |
+| German prose                            | about 4 000     | 5.1                  |
+| Dense skill list with punctuation       | about 9 700     | 2.1                  |
+| Chinese prose (11 200 characters)       | about 6 400     | 1.7                  |
+| Random symbols and digits               | about 14 700    | 1.4                  |
+
+The system prompt adds about 1 200 characters. Typical output is well under 2 000 tokens, but a schema-valid answer can be about 18 000 characters. **So a valid 20 000-character description is not guaranteed to fit.** Ordinary English prose probably does; dense or non-Latin text does not. What Ollama does when the prompt exceeds `num_ctx` (truncation, which side, or an error) was not observed; assume silent loss. The gateway's 30 000-character prompt cap does not protect against this, and `too_long` is not raised for it today. **Proposed protection (not implemented; changing `num_ctx`, limits or model settings needs approval).**
+
+What the response can and cannot prove. These are Ollama's documented `/api/chat` fields and were not observed on this installation, because no chat model is installed:
+
+- `done_reason` of `length` means generation stopped at a limit (`num_predict` or the context). It reliably marks a **truncated answer**, which would otherwise be invalid JSON or, worse, valid JSON that ended early.
+- `prompt_eval_count` and `eval_count` count tokens evaluated and generated. They can show that the window was **full** (`prompt_eval_count + eval_count` at or near `num_ctx`), which is a strong sign the input was cut. They cannot prove the whole input was processed: a prompt that was cut still reports a count at the limit, a count below the limit does not prove nothing was dropped, and `prompt_eval_count` may exclude tokens served from the prompt cache. Treat them as a one-way alarm: a full window means "do not trust this result", never "the input was fully read".
+- Ollama gives `/api/chat` no documented way to refuse an over-long prompt, so overflow handling must be ours.
+
+Recommended safeguards, in order:
+
+1. **Fail closed after inference (code only).** Parse `done_reason`, `prompt_eval_count` and `eval_count` (optional fields; a missing one never raises an error). `done_reason = "length"` maps to `invalid_output`. A full window (`prompt_eval_count + eval_count >= num_ctx - margin`) maps to `too_long`, a permanent error: the result is discarded and the user sees "This description is too long to analyse reliably. Shorten it or keep the requirements section." Nothing is truncated and no partial result is returned.
+2. **Bound the answer.** Send `options.num_predict` (proposed 3 072) so a runaway answer cannot consume the window. Make it consistent with the schema: the largest schema-valid answer is about 18 000 characters, far above 3 072 tokens, so also tighten the schema's worst case (for example 20 skills per list and 120-character quotes) so a valid answer fits. Anything longer ends as `invalid_output`, visibly.
+3. **Preflight estimate before calling the model (code only).** A deterministic estimate of prompt tokens from character classes (letters and spaces about 0.25 token per character, digits and punctuation about 0.75, non-ASCII letters 1.0, times a safety factor of about 1.25), calibrated against the real tokenizer once a model is pulled. If `estimate + system prompt + num_predict > num_ctx`, return `too_long` without calling the model. This replaces the gateway's flat 30 000-character cap, which has no relation to tokens. It saves the wasted inference for obviously oversized input; safeguard 1 remains the authority.
+4. **Context size (configuration, needs approval).** The budget is `num_ctx = system prompt + job text + num_predict`. With 8 192 tokens and `num_predict` 3 072, about 4 700 tokens remain for the posting: enough for 20 000 characters of English prose, not for dense or non-Latin text. With 16 384 tokens, about 12 900 remain, which would cover every proxy sample except random symbols. The memory cost of a 16 384-token context for the chosen Qwen model has not been measured; an architecture-based estimate for a 7B model with grouped-query attention is under 1 GB of key-value cache, to be verified. Prefer a `LLM_NUM_CTX` setting over a hardcoded value.
+5. **Input limit.** Keep the 20 000-character storage limit, and let the preflight estimate (not a character count) decide what can be analysed. A flat lower character limit would reject long English postings that fit and still admit short dense ones that do not.
+
+A tokenizer library for the exact Qwen vocabulary would make safeguard 3 exact, at the cost of a new dependency and a model-specific tokenizer to keep in sync with `LLM_MODEL`; defer that until the heuristic proves inadequate on real data.
+
+Files and tests that would change: `src/lib/ai/ollama-provider.ts` and `ollama-provider.test.ts` (new fields, `num_predict`, mocked `done_reason: "length"`, full-window and missing-field cases); `src/lib/ai/gateway.ts` and `gateway.test.ts` (drop the flat prompt cap or keep it as an outer bound); a new `src/features/job-analysis/domain/estimate-tokens.ts` with its test, called from `application/extract.ts` and `extract.test.ts` (preflight returns `too_long`, calls no provider); `src/features/job-analysis/domain/requirements.ts` and its test if the schema limits are tightened; `src/lib/env-schema.ts` and `env-schema.test.ts` if `LLM_NUM_CTX` is added (plus a `.env.example` line for you to apply); `fixtures.ts` with long dense, non-Latin and oversized fixtures for `pnpm ai:eval`; and these docs. Re-measure with the real tokenizer once a model is pulled.
+
+**Running it.** `pnpm test` runs all Phase 2A unit tests, including the evaluation fixtures with the demo provider. `pnpm ai:eval` runs the fixtures with the demo provider and says so in its output; its numbers prove the pipeline, not model quality. `pnpm ai:eval --provider ollama` is a manual run against the configured model.
+
+**Residual limitations.** Prompt wording does not stop injection (section 5.2). Grounding proves that the text says something, not that it is true: a posting that states "Required: Kubernetes" yields that requirement, including when the sentence is an injected one. The demo provider cannot be injected because it follows no instructions, so the injection fixtures prove the pipeline and not a model's resistance. The dictionary is small and unmapped skills are only flagged.
 
 ## 5. Structured extraction
 
@@ -120,7 +185,7 @@ Skill { name: string (1..80), quote: string (1..200) }   // quote = text copied 
 
 Applied to the validated model output, in this order:
 
-1. **Grounding.** For every skill, normalize the `quote` and the description the same way (Unicode NFKC, lowercase, collapse whitespace) and require the quote to appear as a substring of the description. Items that fail are **dropped and counted** (`droppedUngrounded`), never kept. The count is stored for diagnostics and shown only in aggregate.
+1. **Grounding.** For every skill, normalize the `quote` and the description the same way (Unicode NFKC, lowercase, collapse whitespace) and require the quote to appear as a substring of the description, and require the quote to contain the skill's name or one of its dictionary spellings as a whole word (a quote that does not mention the skill is not evidence for it). Items that fail are **dropped and counted** (`droppedUngrounded`), never kept. The count is stored for diagnostics and shown only in aggregate.
 2. **Normalization of names.** Map each remaining skill `name` to a canonical key through a versioned in-code dictionary of canonical names and aliases (for example `postgres`, `postgresql`, `psql` to `postgresql`). Names not in the dictionary are kept and flagged **unmapped**; they are shown to the user but cannot be compared. A planned `skill` / `skill_alias` table pair replaces the dictionary only if it outgrows code.
 3. **De-duplication.** Duplicates collapse by canonical key (or lowercase name for unmapped). A skill present in both lists stays in `requiredSkills` only.
 4. **Language names** are normalized through a small map (`english`, `en` to `english`).
@@ -352,21 +417,21 @@ Unit tests for deterministic rules must never call a live model (`AGENTS.md`).
 
 ## 13. Open decisions
 
-1. Which chat model to use locally (the project guidance mentions Qwen); none is installed.
+1. ~~Which chat model to use locally.~~ Decided: a Qwen instruct model (recommended `qwen2.5:7b-instruct`, section 4.3). Still open: confirmation on real hardware; none is installed yet.
 2. Compute the score on read (proposed) or persist a `match_result` row for history.
 3. Accept `pg-boss` and a separate worker process (proposed; see the ADR).
 4. Whether profile data may ever be sent to a model (proposed: no, in this MVP).
-5. Whether `LLM_PROVIDER=demo` is allowed when `NODE_ENV=production`.
-6. Whether the module is named `job-analysis` (proposed) or `matching` as in `docs/architecture.md`, and whether `job_requirement` and `match_result` are folded into the new table as proposed.
-7. Size of the starter skill dictionary and who maintains it.
+5. ~~Whether `LLM_PROVIDER=demo` is allowed in production.~~ Decided: rejected, no override.
+6. ~~Module name.~~ Decided: `job-analysis` for extraction; matching and scoring come later. Still open: whether `job_requirement` and `match_result` are folded into one `job_analysis` table as proposed.
+7. ~~Starter dictionary.~~ Decided: small, explicit and versioned (`skills-v1`). Still open: who maintains it and when it moves to tables.
 8. Per-user rate limits (proposed: one active run per job, and a daily cap of 20 runs per user).
 
 ## 14. Delivery order
 
 0. Documentation and decisions (this document, the ADR, the security section, reconciled architecture snapshot).
 1. Candidate skills (migration, UI, tests). **Done.**
-2. Domain: dictionary, requirements schema, grounding, scoring, with exhaustive unit tests.
-3. AI gateway, `demo` and `ollama` providers, environment changes, mocked tests, manual evaluation script.
+2. Domain: dictionary, requirements schema, grounding, scoring, with exhaustive unit tests. **Partly done in 2A** (starter dictionary, requirements schema, grounding); scoring is pending.
+3. AI gateway, `demo` and `ollama` providers, environment changes, mocked tests, manual evaluation script. **Done (Phase 2A)**, except validation against a real model.
 4. Persistence: `job_analysis` and the `job_posting` unique constraint (migrations), repository, state machine, request and retry with rate limits.
 5. Queue and worker: pg-boss dependency, `src/lib/queue.ts`, `src/worker/`, `processAnalysis`.
 6. UI: Match section, polling, breakdown, all states.

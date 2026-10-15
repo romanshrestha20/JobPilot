@@ -27,12 +27,12 @@ This snapshot was reconciled with the repository on 2026-10-15 (working tree, in
 | Database | PostgreSQL 17 via Docker Compose using the `pgvector/pgvector:pg17` image (host port 5433). The pgvector extension is enabled by migration `0000`; no vector columns exist |
 | ORM and migrations | Drizzle ORM and Drizzle Kit. Migrations `0000_enable-pgvector`, `0001_next_pet_avengers` (Better Auth tables), `0002_candidate_profile`, `0003_job_posting`, `0004_job_posting_nonblank_checks`, `0005_job_status`, `0006_candidate_skill` |
 | Authentication and authorization | Better Auth (email and password). Explicit trusted origins, authentication rate limits (in-memory), safe `?next=` redirects, and a proxy that only redirects optimistically. `requireUser()` and `withUser` enforce sessions server-side; every user-owned query is scoped to the owner. HTTPS, multi-instance rate limiting and email flows are not verified (see `docs/security.md`) |
-| Environment | Zod validation in `src/lib/env.ts`: `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, optional `BETTER_AUTH_TRUSTED_ORIGINS`, `OLLAMA_URL`, `LLM_PROVIDER` (`ollama` or `demo`), `LLM_MODEL`, `EMBED_MODEL`. The four AI variables are validated but not read by any code, and `LLM_MODEL` is required even for `demo`. `TEST_DATABASE_URL` is used only by test tooling |
+| Environment | Zod validation (`src/lib/env-schema.ts`, parsed by `src/lib/env.ts`): `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, optional `BETTER_AUTH_TRUSTED_ORIGINS`, `OLLAMA_URL`, `LLM_PROVIDER` (`ollama` or `demo`), `LLM_MODEL`, `LLM_TIMEOUT_MS`, `EMBED_MODEL`. `src/lib/ai` reads all but `EMBED_MODEL`; `LLM_MODEL` is required only for `ollama`, and `demo` is rejected in production. `TEST_DATABASE_URL` is used only by test tooling |
 | Feature modules | `src/features/identity` (server-side `requireUser()` only), `src/features/candidate-profile`, `src/features/job-intake` |
 | Candidate profile | Implemented: headline, summary, location (free text), years of experience, languages, work modes, with the `/profile` page, plus owner-scoped candidate skills (name, level, years, evidence; at most 50 per user). The versioned skill dictionary is not built, so skills are compared by a lowercase key only |
 | Job intake | Implemented: create, list (paginated, status filter), detail, edit and delete of user-owned job postings, plus the current application status (`saved`, `applied`, `interviewing`, `offered`, `rejected`, `withdrawn`) |
 | Application tracking | Only the current status on `job_posting`. No `application` table, notes, deadlines or status history |
-| AI gateway, extraction and matching | Not implemented. Design: `docs/ai-architecture.md` |
+| AI gateway and extraction | Implemented in Phase 2A (`src/lib/ai/`, `src/features/job-analysis/`); not yet called by the application. Persistence, queue, UI and matching are not implemented. Design: `docs/ai-architecture.md` |
 | Background processing | None: no queue, worker or pg-boss dependency. Proposed: `docs/decisions/0001-pg-boss.md` |
 | CV/document storage | Not implemented |
 | UI | Design tokens and shared primitives (`docs/DESIGN.md`), app shell with grouped navigation, breadcrumbs, theme picker |
@@ -148,7 +148,7 @@ Existing shared files include:
 - `src/lib/auth-config.ts`: pure auth configuration helpers (trusted origins, rate-limit rules).
 - `src/lib/safe-redirect.ts`: the single `?next=` redirect validator, shared by the proxy and the sign-in and sign-up pages.
 - `src/proxy.ts`: optimistic redirect for signed-out visitors (not an authorization boundary).
-- `src/lib/env.ts`: environment validation.
+- `src/lib/env.ts` and `src/lib/env-schema.ts`: environment validation (the schema is separate so it can be tested), `src/lib/log.ts`: allowlist logger, `src/lib/ai/`: AI gateway and providers.
 - `src/test/database-guard.ts`: refuses any test database that is not a local `*_test` database different from `DATABASE_URL`.
 - `src/test/integration-db.ts`: connects to the dedicated `*_test` database, applies migrations, and creates test users for integration tests.
 
@@ -239,7 +239,7 @@ Privacy requirements:
 
 ## 9. AI architecture
 
-No shared AI gateway or matching implementation exists in the repository (verified 2026-10-15). This section summarizes the intended design; the detailed design (schemas, scoring, persistence, queue and UI states) is in `docs/ai-architecture.md`, and the security requirements are in `docs/security.md`.
+The shared AI gateway and requirements extraction exist (Phase 2A, `src/lib/ai/`, `src/features/job-analysis/`); persistence, the queue and worker, the UI and matching do not (verified 2026-10-15). This section summarizes the intended design; the detailed design (schemas, scoring, persistence, queue and UI states) is in `docs/ai-architecture.md`, and the security requirements are in `docs/security.md`.
 
 All AI calls should go through a shared gateway implemented when the first AI feature is built. Feature modules must not create provider clients or call provider endpoints directly.
 
@@ -261,7 +261,7 @@ The current environment schema supports:
 - `LLM_MODEL`.
 - `EMBED_MODEL`.
 
-These variables currently describe configuration only: no code reads them. They do not prove that the corresponding AI gateway or demo provider exists. The `demo` provider needs no installed chat model and no Ollama, and the current configuration already accepts it (CI and Playwright set `LLM_PROVIDER=demo`), but `LLM_MODEL` must still be a non-empty string; making it optional for `demo` is a planned change to the schema, `.env.example` and docs together. A local Ollama instance may have no chat model installed (only `bge-m3` was present when this was checked), so `ollama` mode needs one pulled first. Do not rename them or add an OpenAI-compatible provider until the implementation and environment schema are updated together.
+`src/lib/ai` reads `OLLAMA_URL`, `LLM_PROVIDER`, `LLM_MODEL` and `LLM_TIMEOUT_MS` (default 60 000 ms); `EMBED_MODEL` is still unused. `LLM_MODEL` is required only for `ollama`. The `demo` provider needs no installed chat model and no Ollama, and is rejected when `NODE_ENV=production` (so CI and Playwright, which run production builds, use `LLM_PROVIDER=ollama` with a placeholder model). The environment rules live in `src/lib/env-schema.ts`; `.env.example` still needs `LLM_TIMEOUT_MS` and a note that `LLM_MODEL` may be blank for `demo`. A local Ollama instance may have no chat model installed (only `bge-m3` was present when this was checked), so `ollama` mode needs one pulled first. Do not rename them or add an OpenAI-compatible provider until the implementation and environment schema are updated together.
 
 The intended hosted/demo behavior is:
 - `ollama`: local inference.
@@ -330,7 +330,7 @@ Vitest is configured with two suites:
 
 The integration helper refuses any `TEST_DATABASE_URL` that is not on a local host, does not end in `_test`, or equals `DATABASE_URL`.
 
-GitHub Actions (`.github/workflows/ci.yml`) installs with `pnpm install --frozen-lockfile` (pnpm version from `packageManager`, Node version from `.nvmrc`) and starts an ephemeral `pgvector/pgvector:pg17` service. It creates a separate `jobpilot_test` database, checks and applies the migrations to a fresh `jobpilot` database with `pnpm db:migrate`, then runs lint, typecheck, unit tests, integration tests, the production build, and Playwright end-to-end tests (Chromium, using the demo AI configuration). No AI-evaluation tests exist; the layers below describe what is still required.
+GitHub Actions (`.github/workflows/ci.yml`) installs with `pnpm install --frozen-lockfile` (pnpm version from `packageManager`, Node version from `.nvmrc`) and starts an ephemeral `pgvector/pgvector:pg17` service. It creates a separate `jobpilot_test` database, checks and applies the migrations to a fresh `jobpilot` database with `pnpm db:migrate`, then runs lint, typecheck, unit tests, integration tests, the production build, and Playwright end-to-end tests (Chromium, with a placeholder `ollama` AI configuration that is never contacted). The AI unit tests and the demo-provider evaluation fixtures run in the unit-test step; no real-model evaluation exists; the layers below describe what is still required.
 
 Required test layers:
 - **Unit:** scoring, skill normalization, status transitions, validation, and domain rules.

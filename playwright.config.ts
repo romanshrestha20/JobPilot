@@ -61,7 +61,9 @@ export default defineConfig({
       BETTER_AUTH_URL: BASE_URL,
       BETTER_AUTH_SECRET:
         process.env.BETTER_AUTH_SECRET || "e2e-only-secret-not-used-outside-tests-0123456789",
-      LLM_PROVIDER: "demo",
+      // The server runs as a production build, where `LLM_PROVIDER=demo` is rejected. No test
+      // here calls a model, so this placeholder is never contacted.
+      LLM_PROVIDER: "ollama",
       LLM_MODEL: "e2e-placeholder",
     },
   },

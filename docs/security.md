@@ -56,9 +56,9 @@ One shared rule, `safeNextPath` in `src/lib/safe-redirect.ts`, used by the proxy
 - Input is validated with a strict Zod schema: `id`, `userId`, `skillKey`, timestamps and unknown keys are rejected, the canonical key is computed on the server, and control and invisible formatting characters are refused. The database repeats the length, trimmed, level and year-range rules as CHECK constraints.
 - The 50-skill limit and the duplicate rule are enforced in the application inside a transaction that holds a per-user advisory lock, so simultaneous requests cannot exceed them; `UNIQUE (user_id, skill_key)` backs the duplicate rule. Evidence text can describe real work, so it is treated as personal data: it is rendered as plain text, never logged, and never sent to an AI provider.
 
-## AI features (design requirements; not implemented yet)
+## AI features (Phase 2A implemented; persistence, queue and UI planned)
 
-No AI code exists in the repository today. This section is the contract the AI job analysis feature (`docs/ai-architecture.md`) must meet before it ships. Update the "Verification status" section when each item is implemented and tested, and do not describe an item as done before then.
+Phase 2A added the AI gateway, the Ollama and demo providers, requirements extraction and grounding, and the allowlist logger; nothing in the application calls them yet, and there is no persistence, queue or UI. This section is the contract the AI job analysis feature (`docs/ai-architecture.md`) must meet before it ships. Update the "Verification status" section when each item is implemented and tested, and do not describe an item as done before then.
 
 ### Trust boundaries and who enforces what
 
@@ -126,13 +126,34 @@ Never logged: job text, titles or companies from user data, model prompts or res
 
 - A timeout, outage, missing model or unusable response ends the analysis as `failed` with a code. The UI shows a plain message and offers Retry where retrying can help.
 - **No silent fallback.** If the configured provider fails, the system never substitutes the `demo` provider or a partial result.
-- Output from the `demo` provider is labelled "Demo extraction (no AI model)". Whether `demo` may run in production is an open decision.
+- Output from the `demo` provider is labelled "Demo extraction (no AI model)". `demo` is rejected when `NODE_ENV=production`, with no override.
 - Failures do not expose stack traces, SQL, endpoints or provider messages to the browser.
 - A stopped worker leaves analyses `pending`; the UI says an analysis is waiting rather than pretending to progress.
 
 ### What the score is not
 
 The match score measures how much of the requirements **stated in a job description** the user's own profile covers, using fixed, versioned rules, and it reports how much information it could use (coverage). It is not a prediction of hiring, interview or offer probability, and the product must not present it as one. Missing information on either side is shown as missing, not scored as a gap.
+
+### Phase 2A: implemented controls and their limits
+
+Implemented and unit-tested (`src/lib/ai/`, `src/features/job-analysis/`, `src/lib/log.ts`, `src/lib/env-schema.ts`):
+
+- **One boundary.** Model calls go through the gateway only. The provider returns parsed JSON; the gateway validates it with the strict Zod schema (unknown keys, wrong types, out-of-range values and oversized arrays are `invalid_output`). There is no retry, repair or fallback.
+- **Sanitized errors.** Only the five codes leave the gateway. Provider response bodies, status text and exception messages are never returned or logged.
+- **Grounding.** A skill needs a quote that appears in the job text and that names the skill (a quote about something else does not count); years, languages, locations and work mode are checked against the text too. Ungrounded claims are removed and counted.
+- **Prompt boundary.** The job text sits between lines derived from a hash of the text, so the text cannot close the boundary and add instructions. The prompt states that the text is data. This is a quality measure, not a control.
+- **No model capabilities.** The provider call sends messages and a JSON Schema and receives text. No tools, URLs, code or SQL are offered or executed; redirects are refused.
+- **Data minimization.** `extractRequirements(gateway, jobText)` takes the job text only. A test asserts that no profile or skill data reaches the provider, and an import-boundary test asserts that the AI layer and `job-analysis` import no candidate-profile, identity, database or queue code.
+- **Log redaction.** The logger writes allowlisted fields only (event, code, duration, provider, model, prompt version, opaque ids, counters) and drops everything else, including any exception. The gateway logs event, code, provider, model and duration.
+- **Configuration.** `LLM_PROVIDER=demo` is rejected when `NODE_ENV=production`; `ollama` requires `LLM_MODEL`.
+
+Limitations, stated plainly:
+
+- **Injection is not solved.** Grounding cannot tell a real requirement from one a hostile posting plants. The effect is bounded: the output can only change the analysis of that same posting for the user who saved it, and it is schema-limited text. It cannot reach another user's data, because no data access exists in this phase.
+- **No real-model injection testing.** The injection fixtures run through a fake provider and the demo extractor, which follows no instructions. Resistance of a real model is unmeasured.
+- **Not built yet:** ownership checks (there is no persistence), per-user rate limits and the one-active-run rule, the worker's re-reading of ownership, and the "failed" and "unavailable" UI. Each remains required before the feature ships.
+- **Ollama is trusted configuration.** The provider reads a response body fully before applying its 64 000-character cap, which is acceptable for a local trusted service but not for an untrusted endpoint. `OLLAMA_URL` must never come from user input.
+- **Possible silent truncation.** Prompt and answer share an 8 192-token context. A 20 000-character description can exceed it (a proxy measurement gave about 9 700 tokens for a dense skill list and about 14 700 for random symbols; English prose was about 4 300). Nothing detects this yet, so requirements may be missed without an error. Remediation is described in `docs/ai-architecture.md` ("Long inputs") and is not implemented.
 
 ### Before this ships
 
@@ -150,6 +171,8 @@ Threat checks to complete and record here: injection tests passing, schema and g
 
 Tested: origin validation and rate limits through the real Better Auth handler with its in-memory adapter (`src/lib/auth-config.test.ts`), redirect rules (`src/lib/safe-redirect.test.ts`), proxy behavior (`src/proxy.test.ts`), and a manual smoke test against `next start` over plain HTTP on localhost.
 
-Not implemented, therefore not tested: everything in "AI features".
+Tested (unit, no model or database): the AI gateway, Ollama provider with mocked `fetch`, demo provider and factory, environment rules, logger redaction, requirements schema, prompt construction, grounding, extraction with injection fixtures, and the import boundaries (see "Phase 2A" above). Not tested against a real model.
+
+Not implemented, therefore not tested: persistence, ownership checks and rate limits for analyses, the queue and worker, and the analysis UI.
 
 Not tested: HTTPS and `__Secure-` cookie behavior in a real deployment, any proxy or multi-instance setup, and the sign-in page's final navigation in a browser.

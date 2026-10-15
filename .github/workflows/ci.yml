@@ -43,7 +43,8 @@ jobs:
       # Placeholders so env validation passes during build; nothing here is used at runtime.
       BETTER_AUTH_URL: http://localhost:3001
       BETTER_AUTH_SECRET: ci-only-secret-not-used-outside-this-job
-      LLM_PROVIDER: demo
+      # `demo` is rejected for production builds. Nothing in CI contacts a model.
+      LLM_PROVIDER: ollama
       LLM_MODEL: ci-placeholder
       NEXT_TELEMETRY_DISABLED: "1"
 

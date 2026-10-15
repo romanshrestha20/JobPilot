@@ -34,6 +34,13 @@ On failure, traces and screenshots are written to `test-results/` (git-ignored);
 
 Long unbroken text (titles, companies, locations, links, descriptions) is covered by `long text` tests in `e2e/jobs.spec.ts` at 1280px and 375px on the list, detail, edit and failed-form views. They fail on page-level horizontal scroll, on any element that sticks out of the viewport, and on any text element that clips its own content. Streamed content first sits in a hidden container, so these tests wait for `toBeVisible()` before measuring.
 
+## AI layer (Phase 2A)
+
+- Unit tests cover the gateway, the Ollama provider (mocked `fetch`), the demo provider, environment rules, the logger, the requirements schema, prompt and grounding, extraction with prompt-injection fixtures, and import boundaries. They need no Ollama, database or network.
+- `pnpm ai:eval` runs the fixed fixtures (`src/features/job-analysis/fixtures.ts`) through the whole extraction pipeline with the deterministic **demo** provider and exits 1 on any failure. The same fixtures run in `pnpm test` (`evaluation.test.ts`), which is what CI executes. Demo results are labelled in the output and say nothing about model accuracy.
+- `pnpm ai:eval --provider ollama` is a manual run against `OLLAMA_URL` and `LLM_MODEL`. It needs a pulled chat model (see `docs/ai-architecture.md` section 4.3) and is not part of CI. It has not been run: no chat model is installed.
+- CI and the Playwright server run with `LLM_PROVIDER=ollama` and a placeholder `LLM_MODEL`, because `demo` is rejected in production builds. Nothing there contacts a model. Phase 2B end-to-end tests that need an analysis result should use a fake Ollama HTTP server.
+
 ## Candidate skills E2E: timing races
 
 Two timing races in `e2e/skills.spec.ts` caused intermittent failures under load (investigated 2026-10-15) and are fixed in the test file; no application code changed.
