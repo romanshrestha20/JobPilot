@@ -12,27 +12,32 @@ Use sources of truth in this order:
 2. This document records agreed architecture and intended behavior.
 3. `AGENTS.md` defines the mandatory workflow and rules for coding agents.
 4. `docs/DESIGN.md` is the UI design reference, not the system architecture.
+5. `docs/ai-architecture.md` is the detailed design of the AI job analysis feature, `docs/security.md` records security decisions, and `docs/decisions/` holds architecture decision records.
 
 Update this document when an architectural decision or implementation status materially changes. Do not create infrastructure solely to match a diagram.
 
 ## 2. Current implementation snapshot
 
-This snapshot reflects the repository's tracked `main` branch when this document was reconciled. Re-check the repository before relying on it.
+This snapshot was reconciled with the repository on 2026-10-15 (working tree, including the app shell and navigation). Re-check the repository before relying on it; update this table when a row changes.
 
 | Area | Current state |
 |---|---|
-| Web application | Next.js App Router, React, TypeScript, Tailwind CSS |
-| Package manager | pnpm; `pnpm-lock.yaml` is tracked |
-| Database | PostgreSQL via Docker Compose, using the pgvector PostgreSQL image |
-| ORM and migrations | Drizzle ORM and Drizzle Kit; migrations are tracked under `drizzle/` |
-| Authentication | Better Auth configuration, Drizzle schema, API route, and sign-in/sign-up pages exist; production readiness is not yet verified |
-| Environment | Zod validation in `src/lib/env.ts`; current names include `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `OLLAMA_URL`, `LLM_PROVIDER`, `LLM_MODEL`, and `EMBED_MODEL` |
-| Feature modules | `src/features/` exists but contains no implemented feature modules in the inspected snapshot |
-| AI gateway and matching | Not implemented in the inspected source |
-| CV/document storage | Not implemented in the inspected source |
-| Candidate profile and application tracking | Not implemented in the inspected source |
-| Automated tests | No test runner, test scripts, or test files were present in the inspected snapshot |
-| CI | Workflow exists, but it uses npm commands despite the pnpm project configuration; fix before relying on CI |
+| Web application | Next.js 16 App Router with Cache Components, React 19, strict TypeScript, Tailwind CSS v4. Route groups: `src/app/(app)/` (signed-in pages inside the app shell with sidebar navigation) and `src/app/(auth)/` (sign-in, sign-up) |
+| Package manager and runtime | pnpm (version from `packageManager`); Node 22 (`.nvmrc`, `engines.node >=22`) |
+| Database | PostgreSQL 17 via Docker Compose using the `pgvector/pgvector:pg17` image (host port 5433). The pgvector extension is enabled by migration `0000`; no vector columns exist |
+| ORM and migrations | Drizzle ORM and Drizzle Kit. Migrations `0000_enable-pgvector`, `0001_next_pet_avengers` (Better Auth tables), `0002_candidate_profile`, `0003_job_posting`, `0004_job_posting_nonblank_checks`, `0005_job_status`, `0006_candidate_skill` |
+| Authentication and authorization | Better Auth (email and password). Explicit trusted origins, authentication rate limits (in-memory), safe `?next=` redirects, and a proxy that only redirects optimistically. `requireUser()` and `withUser` enforce sessions server-side; every user-owned query is scoped to the owner. HTTPS, multi-instance rate limiting and email flows are not verified (see `docs/security.md`) |
+| Environment | Zod validation in `src/lib/env.ts`: `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, optional `BETTER_AUTH_TRUSTED_ORIGINS`, `OLLAMA_URL`, `LLM_PROVIDER` (`ollama` or `demo`), `LLM_MODEL`, `EMBED_MODEL`. The four AI variables are validated but not read by any code, and `LLM_MODEL` is required even for `demo`. `TEST_DATABASE_URL` is used only by test tooling |
+| Feature modules | `src/features/identity` (server-side `requireUser()` only), `src/features/candidate-profile`, `src/features/job-intake` |
+| Candidate profile | Implemented: headline, summary, location (free text), years of experience, languages, work modes, with the `/profile` page, plus owner-scoped candidate skills (name, level, years, evidence; at most 50 per user). The versioned skill dictionary is not built, so skills are compared by a lowercase key only |
+| Job intake | Implemented: create, list (paginated, status filter), detail, edit and delete of user-owned job postings, plus the current application status (`saved`, `applied`, `interviewing`, `offered`, `rejected`, `withdrawn`) |
+| Application tracking | Only the current status on `job_posting`. No `application` table, notes, deadlines or status history |
+| AI gateway, extraction and matching | Not implemented. Design: `docs/ai-architecture.md` |
+| Background processing | None: no queue, worker or pg-boss dependency. Proposed: `docs/decisions/0001-pg-boss.md` |
+| CV/document storage | Not implemented |
+| UI | Design tokens and shared primitives (`docs/DESIGN.md`), app shell with grouped navigation, breadcrumbs, theme picker |
+| Automated tests | Vitest unit tests (`pnpm test`) and PostgreSQL integration tests against the guarded `*_test` database (`pnpm test:integration`); Playwright end-to-end tests in Chromium (`pnpm test:e2e`), with an optional Firefox and WebKit run of the design-system checks. No AI evaluation tests |
+| CI | `.github/workflows/ci.yml` uses pnpm with a frozen lockfile and a `pgvector/pgvector:pg17` service: lint, typecheck, unit tests, migration consistency check, migrations on a fresh database, integration tests, build, Playwright install and end-to-end tests |
 
 The existing code uses `src/lib/` for shared database, auth, environment, and schema code. Keep this structure for now. Do not migrate everything to a new `src/server/` tree merely to match a proposed layout.
 
@@ -63,6 +68,8 @@ The MVP should deliver one complete workflow before expanding into automation.
 6. AI explanation grounded in the deterministic score breakdown.
 7. Application tracking with status, notes, and deadlines.
 8. A demo mode that does not require a locally running language model.
+
+Status against this list (see section 15): items 1 and 3 are implemented; item 2 is implemented (skills have no alias dictionary yet); items 4 to 6 are planned (`docs/ai-architecture.md`); item 7 is partial (current status only); item 8 is supported by configuration only (`LLM_PROVIDER=demo` is accepted, the provider is not built).
 
 CV upload and extraction may be included after the core profile-to-match workflow is reliable. Treat secure file storage and extraction limits as required if CV upload is included in the MVP, not as optional security work.
 
@@ -100,11 +107,11 @@ Create feature folders when work on the feature begins. A substantial module can
 Do not create empty layers or folders when a feature does not need them. Small features may use a simpler structure, provided responsibilities remain clear.
 
 Initial feature ownership:
-- `candidate-profile` (implemented in `src/features/candidate-profile/`): the candidate profile (headline, summary, location, experience, languages, work modes). Candidate skills are not implemented yet.
-- `jobs`: manually entered job descriptions and job requirements.
-- `matching`: score calculation and match result.
+- `candidate-profile` (implemented in `src/features/candidate-profile/`): the candidate profile (headline, summary, location, experience, languages, work modes) and the candidate's skills.
+- `job-intake` (implemented in `src/features/job-intake/`; this is the `jobs` module under its actual name): manually entered job descriptions, editing, deletion and the current application status. Jobs are private to one user: there is no sharing or cross-user deduplication.
+- `matching` (planned as `job-analysis`, see `docs/ai-architecture.md`): requirement extraction, grounding, score calculation and match breakdown. It combines what this document earlier split between `jobs` (requirements) and `matching` (score) because they share one versioned lifecycle. Confirm this refinement before implementation.
 - `documents`: uploaded CV metadata and extraction results.
-- `applications`: application status, notes, and deadlines.
+- `applications` (planned): notes, deadlines and status history. The current status already lives on `job_posting` in `job-intake`; decide whether it moves when `applications` is built.
 
 #### `candidate-profile` module
 
@@ -113,6 +120,19 @@ Initial feature ownership:
 - `repository.ts`: Drizzle persistence behind the `ProfileRepository` port. Every operation is keyed by the owner's user id; there is no lookup by profile id.
 - `service.ts`: use cases `getMyProfile(user)` and `updateMyProfile(user, input)`. The owner always comes from the authenticated session user, never from input.
 - `actions.ts`, `form.ts`, `ui/profile-form.tsx`: the Server Action and form behind `/profile`. The action calls `requireUser()` itself, so protection does not depend on `src/proxy.ts`.
+- `schema.ts` also holds `candidate_skill`: `user_id` `NOT NULL` with `ON DELETE CASCADE`, `UNIQUE (user_id, skill_key)`, `timestamptz` timestamps, and CHECK constraints for the key and name (1 to 80 characters, trimmed), level (`beginner`, `intermediate`, `advanced`, `expert`), years (0 to 60) and evidence (1 to 500 characters, not blank).
+- `skills/validation.ts`, `skills/skill-key.ts`: strict Zod input (`name`, `level`, `yearsOfExperience`, `evidence`; `id`, `userId`, `skillKey` and unknown keys are rejected) and the canonical key (NFKC, lowercase, collapsed whitespace; punctuation kept). The key is derived on the server, never taken from input. It is the placeholder for the planned dictionary; aliases such as `postgres` and `postgresql` are still two keys.
+- `skills/repository.ts`: `SkillRepository` port. Every operation takes the owner's user id in the SQL `WHERE` clause. Add and edit run in a transaction that first takes a per-user advisory lock (`pg_advisory_xact_lock`), so the 50-skill limit and the duplicate check hold under simultaneous requests; the unique constraint is the last line of defence for duplicates. Reads are bounded to 50 rows.
+- `skills/service.ts`, `skills/actions.ts`, `skills/form.ts`, `ui/skills-section.tsx` and its client components: add, edit and remove behind the Skills card on `/profile`. A malformed, missing or foreign skill id is indistinguishable; removing one is a no-op. Skills are never sent to an AI provider.
+- `index.ts`: server-only composition root and public exports.
+
+#### `job-intake` module
+
+- `schema.ts`: the `job_posting` table (`user_id` `NOT NULL` with `ON DELETE CASCADE`, length, non-blank and `http(s)` URL CHECK constraints, and a status CHECK). Timestamps are `timestamptz`.
+- `validation.ts`: strict Zod input schema (unknown keys and any client-supplied `id`, `userId`, timestamps or status are rejected), the status list `JOB_STATUSES`, and the DTO types.
+- `repository.ts`: `JobRepository` port. Every operation takes the owner's user id and puts it in the SQL `WHERE` clause; there is no lookup, update or delete by job id alone.
+- `service.ts`: create, list (paginated, optional status filter), get, update, change status, and delete. Missing, malformed and foreign ids are indistinguishable.
+- `actions.ts`, `form.ts`, `ui/`: Server Actions and forms behind `/jobs`, `/jobs/new`, `/jobs/[id]` and `/jobs/[id]/edit`. Editing and status changes are separate actions, so an edit cannot reset the status.
 - `index.ts`: server-only composition root and public exports.
 
 ### Shared infrastructure: `src/lib/`
@@ -125,10 +145,14 @@ Existing shared files include:
 - `src/lib/authz.ts`: framework-free authorization helpers: `requireUserFromHeaders`, `assertOwned`, and the `UnauthenticatedError` / `NotFoundError` types.
 - `src/lib/api-auth.ts`: `withUser` wrapper for route handlers (401 when signed out, 404 for missing or not-owned records).
 - `src/features/identity/server.ts`: `requireUser()` for Server Components and server actions (redirects to `/sign-in`).
+- `src/lib/auth-config.ts`: pure auth configuration helpers (trusted origins, rate-limit rules).
+- `src/lib/safe-redirect.ts`: the single `?next=` redirect validator, shared by the proxy and the sign-in and sign-up pages.
+- `src/proxy.ts`: optimistic redirect for signed-out visitors (not an authorization boundary).
 - `src/lib/env.ts`: environment validation.
+- `src/test/database-guard.ts`: refuses any test database that is not a local `*_test` database different from `DATABASE_URL`.
 - `src/test/integration-db.ts`: connects to the dedicated `*_test` database, applies migrations, and creates test users for integration tests.
 
-As capabilities are implemented, shared infrastructure may be added under `src/lib/ai/`, `src/lib/storage/`, or similarly focused paths. Avoid speculative abstractions.
+The signed-in application shell, navigation and theme picker live in `src/components/navigation/` (presentation, see `docs/DESIGN.md`). As capabilities are implemented, shared infrastructure may be added under `src/lib/ai/`, `src/lib/storage/`, or similarly focused paths (the AI gateway is planned at `src/lib/ai/`). Avoid speculative abstractions.
 
 ## 6. Dependency rules
 
@@ -179,7 +203,7 @@ PostgreSQL is the source of truth. Drizzle defines schema and generates migratio
 | `application` | Job relationship, status, applied date, and deadline |
 | `application_note` | Notes and status history |
 
-Only `candidate_profile` exists as a table (migration `0002_candidate_profile`); the others are planned. Before implementing them, define whether jobs are always private to one user or can be shared, and make that ownership model explicit.
+Implemented tables: `candidate_profile` (migration `0002`), `candidate_skill` (migration `0006`) and `job_posting` (migrations `0003` to `0005`, the `job` entity under its actual name). Jobs are private to one user; there is no sharing or deduplication. The others are planned. For job analysis, `docs/ai-architecture.md` proposes a `job_analysis` table (holding the extracted requirements as validated JSON) instead of separate `job_requirement` and `match_result` tables, with the score computed from the current profile when read; those deviations from the list above are open decisions until confirmed.
 
 ### Database rules
 
@@ -215,7 +239,7 @@ Privacy requirements:
 
 ## 9. AI architecture
 
-No shared AI gateway or matching implementation was present in the inspected source snapshot. This section defines the intended design.
+No shared AI gateway or matching implementation exists in the repository (verified 2026-10-15). This section summarizes the intended design; the detailed design (schemas, scoring, persistence, queue and UI states) is in `docs/ai-architecture.md`, and the security requirements are in `docs/security.md`.
 
 All AI calls should go through a shared gateway implemented when the first AI feature is built. Feature modules must not create provider clients or call provider endpoints directly.
 
@@ -237,7 +261,7 @@ The current environment schema supports:
 - `LLM_MODEL`.
 - `EMBED_MODEL`.
 
-These variables currently describe configuration only. They do not prove that the corresponding AI gateway or demo provider exists. Do not rename them or add an OpenAI-compatible provider until the implementation and environment schema are updated together.
+These variables currently describe configuration only: no code reads them. They do not prove that the corresponding AI gateway or demo provider exists. The `demo` provider needs no installed chat model and no Ollama, and the current configuration already accepts it (CI and Playwright set `LLM_PROVIDER=demo`), but `LLM_MODEL` must still be a non-empty string; making it optional for `demo` is a planned change to the schema, `.env.example` and docs together. A local Ollama instance may have no chat model installed (only `bge-m3` was present when this was checked), so `ollama` mode needs one pulled first. Do not rename them or add an OpenAI-compatible provider until the implementation and environment schema are updated together.
 
 The intended hosted/demo behavior is:
 - `ollama`: local inference.
@@ -262,11 +286,13 @@ Proposed starting weights:
 | Language requirements | 10 |
 | Location / remote fit | 10 |
 
+`docs/ai-architecture.md` adopts these weights as scoring version `match-v1` and defines the formulas, partial credit, missing-data handling (components that cannot be assessed are removed and the score is renormalized over the assessable weight, which is reported as coverage), the interpretation labels, and the disclaimer that the score measures overlap with stated requirements, not hiring probability.
+
 Before implementing the scorer, define component formulas, partial matches, missing evidence, unknown requirements, renormalization, rounding, and behavior when there are no usable requirements. Version the algorithm. Unit tests for scoring must not require a language model.
 
 ## 10. File storage and CV extraction
 
-Document storage is not implemented in the inspected source snapshot. Add it only when the document feature is started.
+Document storage is not implemented. Add it only when the document feature is started.
 
 When implemented:
 - Define a small storage interface and concrete adapter(s) required by the actual deployment.
@@ -300,17 +326,17 @@ Future storage configuration should be introduced only with a storage implementa
 
 Vitest is configured with two suites:
 - `pnpm test` runs unit tests (`*.test.ts`) with no database or model.
-- `pnpm test:integration` runs `*.integration.test.ts` against a real PostgreSQL database named by `TEST_DATABASE_URL`. The helper refuses any database whose name does not end in `_test`, applies all migrations, and cleans up the users it creates. The candidate-profile suite covers create, read, update, cross-user denial, and the database constraints.
+- `pnpm test:integration` runs `*.integration.test.ts` against a real PostgreSQL database named by `TEST_DATABASE_URL`. The helper refuses any database whose name does not end in `_test`, applies all migrations, and cleans up the users it creates. The candidate-profile suites cover create, read, update, cross-user denial, and the database constraints; the skills suite adds duplicate keys, the 50-skill limit under real concurrent requests (a separate connection pool), cascade deletes and every CHECK constraint.
 
 The integration helper refuses any `TEST_DATABASE_URL` that is not on a local host, does not end in `_test`, or equals `DATABASE_URL`.
 
-GitHub Actions (`.github/workflows/ci.yml`) installs with `pnpm install --frozen-lockfile` (pnpm version from `packageManager`, Node version from `.nvmrc`) and starts an ephemeral `pgvector/pgvector:pg17` service. It creates a separate `jobpilot_test` database, checks and applies the migrations to a fresh `jobpilot` database with `pnpm db:migrate`, then runs lint, typecheck, unit tests, integration tests, and the production build. No AI-evaluation or end-to-end tests exist; the layers below describe what is still required.
+GitHub Actions (`.github/workflows/ci.yml`) installs with `pnpm install --frozen-lockfile` (pnpm version from `packageManager`, Node version from `.nvmrc`) and starts an ephemeral `pgvector/pgvector:pg17` service. It creates a separate `jobpilot_test` database, checks and applies the migrations to a fresh `jobpilot` database with `pnpm db:migrate`, then runs lint, typecheck, unit tests, integration tests, the production build, and Playwright end-to-end tests (Chromium, using the demo AI configuration). No AI-evaluation tests exist; the layers below describe what is still required.
 
 Required test layers:
 - **Unit:** scoring, skill normalization, status transitions, validation, and domain rules.
 - **Integration:** database repositories, ownership enforcement, migrations, and adapters against appropriate test infrastructure.
 - **AI evaluation:** a small fixed set of job descriptions for schema validity, extraction quality, and grounded explanations.
-- **End-to-end:** authentication, protected access, profile/job intake, matching, and application tracking.
+- **End-to-end:** authentication, protected access, profile and job intake, navigation, and the design system exist (`e2e/`); matching and application tracking tests are still required.
 
 Tests for deterministic business rules must not call a live model. Critical cross-user authorization paths must include negative tests. CI must use the repository's configured pnpm version and lockfile, and run the checks that actually exist in `package.json`. Do not document missing scripts as working commands.
 
@@ -324,25 +350,25 @@ Target deployment principles:
 - Keep production secrets in the deployment platform's secret manager.
 - Configure backups, restore procedures, error monitoring, and retention before production use.
 - Confirm that the hosting platform supports any chosen file-storage and AI provider configuration.
-- Introduce a separate worker only when a real background workload exists. Background jobs must be idempotent and define retries, timeouts, and execution status.
+- Introduce a separate worker only when a real background workload exists. The first such workload is AI job analysis; the proposed queue and worker are described in `docs/decisions/0001-pg-boss.md` and are not yet implemented. Background jobs must be idempotent and define retries, timeouts, and execution status.
 
 ## 15. Roadmap
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1. Foundation | CI, test runner, environment conventions, verified auth, migration checks | In progress |
-| 2. Profile and jobs | Candidate profile, skills, manual job intake | Planned |
-| 3. Matching | AI extraction, deterministic scoring, explanation, demo fixtures | Planned |
-| 4. Tracking | Applications, notes, deadlines | Planned |
+| 1. Foundation | CI, test runners, environment conventions, verified auth, migration checks | Largely done: CI, Vitest, Playwright, migration checks and auth hardening exist; production deployment checks (HTTPS, multi-instance rate limits) remain |
+| 2. Profile and jobs | Candidate profile, skills, manual job intake | Profile, candidate skills and job intake done |
+| 3. Matching | AI extraction, deterministic scoring, explanation, demo fixtures | Planned; design in `docs/ai-architecture.md` |
+| 4. Tracking | Applications, notes, deadlines | Partial: current status on jobs; notes, deadlines and history planned |
 | 5. Documents | Secure CV storage and extraction | Planned; prioritize based on MVP needs |
-| 6. Hardening | E2E tests, monitoring, backups, retention, recovery | Required before public production |
-| 7. Automation | Job feeds, background jobs, notifications, analytics | Post-MVP |
+| 6. Hardening | E2E tests, monitoring, backups, retention, recovery | E2E tests exist; the rest is required before public production |
+| 7. Automation | Job feeds, background jobs, notifications, analytics | Post-MVP (the queue for job analysis is proposed earlier, see ADR 0001) |
 
-Status reflects the inspected source snapshot and must be updated as features are implemented.
+Status reflects the repository as reconciled on 2026-10-15 and must be updated as features are implemented.
 
 ## 16. Architecture decision records
 
-Record significant decisions under `docs/adr/`. The current repository did not contain this directory in the inspected snapshot; create it when the first ADR is written.
+Record significant decisions as numbered files under `docs/decisions/` (the location named in `AGENTS.md`). The first record is `docs/decisions/0001-pg-boss.md` (proposed).
 
 Initial decisions to record:
 - Modular monolith in a single package.
