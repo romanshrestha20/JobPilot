@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { candidateSkill } from "@/features/candidate-profile/schema";
 import { jobPosting } from "@/features/job-intake/schema";
 import { user as userTable } from "@/lib/schema";
 import { connectTestDatabase } from "@/test/integration-db";
@@ -93,6 +94,47 @@ export async function storedJobStatus(jobId: string): Promise<string | null> {
       .from(jobPosting)
       .where(eq(jobPosting.id, jobId));
     return row?.status ?? null;
+  } finally {
+    await close();
+  }
+}
+
+/** Inserts `count` skills ("<prefix> 1" …) straight into the guarded test database. */
+export async function seedSkills(email: string, count: number, prefix = "Seed Skill") {
+  const { db, close } = await connectTestDatabase();
+  try {
+    const [owner] = await db
+      .select({ id: userTable.id })
+      .from(userTable)
+      .where(eq(userTable.email, email));
+    if (!owner) throw new Error("seedSkills: test user not found");
+    await db.insert(candidateSkill).values(
+      Array.from({ length: count }, (_, index) => ({
+        userId: owner.id,
+        skillKey: `${prefix.toLowerCase()} ${index + 1}`,
+        displayName: `${prefix} ${index + 1}`,
+      })),
+    );
+  } finally {
+    await close();
+  }
+}
+
+/** Reads a user's stored skills straight from the test database. */
+export async function storedSkills(email: string) {
+  const { db, close } = await connectTestDatabase();
+  try {
+    return await db
+      .select({
+        skillKey: candidateSkill.skillKey,
+        displayName: candidateSkill.displayName,
+        level: candidateSkill.level,
+        yearsOfExperience: candidateSkill.yearsOfExperience,
+        evidence: candidateSkill.evidence,
+      })
+      .from(candidateSkill)
+      .innerJoin(userTable, eq(candidateSkill.userId, userTable.id))
+      .where(eq(userTable.email, email));
   } finally {
     await close();
   }

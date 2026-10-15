@@ -43,6 +43,13 @@
       "when": 1792012789861,
       "tag": "0005_job_status",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792017129667,
+      "tag": "0006_candidate_skill",
+      "breakpoints": true
     }
   ]
 }

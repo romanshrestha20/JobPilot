@@ -33,3 +33,11 @@ On failure, traces and screenshots are written to `test-results/` (git-ignored);
 ## Long text
 
 Long unbroken text (titles, companies, locations, links, descriptions) is covered by `long text` tests in `e2e/jobs.spec.ts` at 1280px and 375px on the list, detail, edit and failed-form views. They fail on page-level horizontal scroll, on any element that sticks out of the viewport, and on any text element that clips its own content. Streamed content first sits in a hidden container, so these tests wait for `toBeVisible()` before measuring.
+
+## Candidate skills E2E: timing races
+
+Two timing races in `e2e/skills.spec.ts` caused intermittent failures under load (investigated 2026-10-15) and are fixed in the test file; no application code changed.
+
+- **Form reset race.** `addSkill` waited only for the Server Action's HTTP response, but React 19 commits the result and resets the uncontrolled form slightly later, so the next `fill` could be wiped and the click submitted an empty name (no POST, 30 s timeout). The failure screenshot showed the success alert, the new skill and an empty name field. `addSkill` now also waits for the "Add skill" button to return (it reads "Adding…" until the commit), or for the limit alert that replaces the form after the 50th skill. Validation, duplicate and stale-form limit errors keep the form, so the wait cannot hang on them.
+- **Console 404 after the session is cleared.** The user-switch test cleared cookies while the signed-in page was open; a client navigation or prefetch then got a 307 to `/sign-in`, and the redirected `_rsc` request returned 404, which the console-error fixture reports. The page still ends on `/sign-in?next=…`, so only the console message was affected. The test now navigates to `about:blank` before clearing cookies. The underlying proxy and `_rsc` redirect behaviour was reproduced (4 of 4) but not investigated further.
+- Evidence: before the fix the file failed 11 of 192 under `--repeat-each=12` and the full suite failed 2 of 3 runs; after it the same file passed 192 of 192 and the full suite passed 4 of 4 runs (93 tests each).

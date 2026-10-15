@@ -136,7 +136,7 @@ Matching needs candidate skills, so they were built first (table `candidate_skil
 | --------------------------- | ---------------------------------------------------------------------------- |
 | `skill_key`, `display_name` | Canonical key from the same dictionary; unmapped skills keep a lowercase key |
 | `level`                     | Optional: `beginner`, `intermediate`, `advanced`, `expert`                   |
-| `years`                     | Optional integer 0..60                                                       |
+| `years_of_experience`       | Optional whole number of years, 0..60                                        |
 | `evidence`                  | Optional text up to 500 characters (what the candidate did with it)          |
 | uniqueness                  | One row per `(user_id, skill_key)`; at most 50 skills per user               |
 
