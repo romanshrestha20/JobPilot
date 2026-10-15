@@ -153,7 +153,7 @@ Limitations, stated plainly:
 - **No real-model injection testing.** The injection fixtures run through a fake provider and the demo extractor, which follows no instructions. Resistance of a real model is unmeasured.
 - **Not built yet:** ownership checks (there is no persistence), per-user rate limits and the one-active-run rule, the worker's re-reading of ownership, and the "failed" and "unavailable" UI. Each remains required before the feature ships.
 - **Ollama is trusted configuration.** The provider reads a response body fully before applying its 64 000-character cap, which is acceptable for a local trusted service but not for an untrusted endpoint. `OLLAMA_URL` must never come from user input.
-- **Possible silent truncation.** Prompt and answer share an 8 192-token context. A 20 000-character description can exceed it (a proxy measurement gave about 9 700 tokens for a dense skill list and about 14 700 for random symbols; English prose was about 4 300). Nothing detects this yet, so requirements may be missed without an error. Remediation is described in `docs/ai-architecture.md` ("Long inputs") and is not implemented.
+- **Truncation is guarded, not eliminated.** Prompt and answer share an 8 192-token context. The gateway refuses input whose estimated size exceeds the budget (`too_long`, no request sent), and the Ollama provider rejects answers that stopped at a length limit, have no stop reason, or leave the window 95% full. The estimator is approximate (fitted to a proxy tokenizer, not the chat model), and token counts cannot prove the whole input was read, so some truncation could still go unnoticed. Details and limits: `docs/ai-architecture.md` ("Long inputs"). Not verified against a real model.
 
 ### Before this ships
 

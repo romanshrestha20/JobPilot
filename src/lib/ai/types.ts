@@ -29,6 +29,12 @@ export interface LlmProvider {
   readonly name: ProviderName;
   /** Configured model name; null when no model is involved (demo). */
   readonly model: string | null;
+  /**
+   * Largest estimated prompt (system plus user, see `token-estimate.ts`) this provider can take
+   * while leaving room for the answer. The gateway refuses anything larger before calling the
+   * provider. Absent or null means the provider has no context limit (the demo provider).
+   */
+  readonly promptTokenBudget?: number | null;
   generateStructured(request: ProviderRequest): Promise<unknown>;
 }
 

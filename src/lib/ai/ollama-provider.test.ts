@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { AiError } from "./errors";
-import { MAX_RESPONSE_CHARS, createOllamaProvider } from "./ollama-provider";
+import {
+  CONTEXT_FULL_RATIO,
+  DEFAULT_NUM_CTX,
+  MAX_RESPONSE_CHARS,
+  createOllamaProvider,
+} from "./ollama-provider";
+import { OUTPUT_RESERVE_TOKENS } from "./token-estimate";
 import type { ProviderRequest } from "./types";
 
 const request = (overrides: Partial<ProviderRequest> = {}): ProviderRequest => ({
@@ -13,8 +19,17 @@ const request = (overrides: Partial<ProviderRequest> = {}): ProviderRequest => (
   ...overrides,
 });
 
-const chatBody = (content: string) =>
-  JSON.stringify({ model: "m", message: { role: "assistant", content }, done: true });
+// A complete, ordinary response by default; `extra` overrides or (as undefined) removes fields.
+const chatBody = (content: string, extra: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    model: "m",
+    message: { role: "assistant", content },
+    done: true,
+    done_reason: "stop",
+    prompt_eval_count: 1200,
+    eval_count: 300,
+    ...extra,
+  });
 const respond = (body: string, init: ResponseInit = { status: 200 }) =>
   vi.fn(async () => new Response(body, init));
 
@@ -147,5 +162,120 @@ describe("ollama provider", () => {
     await expect(provider(f as never).generateStructured(request())).rejects.toSatisfy(
       (error: Error) => !error.message.includes("secret detail"),
     );
+  });
+});
+
+// Deterministic unit tests with a mocked `fetch`. They exercise our handling of the documented
+// `/api/chat` response fields; none of this was observed from a real chat model.
+describe("ollama provider: incomplete and oversized responses (mocked fetch)", () => {
+  const ask = (body: string) => provider(respond(body) as never).generateStructured(request());
+  const full = DEFAULT_NUM_CTX;
+  const threshold = Math.ceil(full * CONTEXT_FULL_RATIO);
+
+  it("exposes a prompt budget that leaves room for the answer", () => {
+    expect(provider(respond("") as never).promptTokenBudget).toBe(
+      DEFAULT_NUM_CTX - OUTPUT_RESERVE_TOKENS,
+    );
+    const small = createOllamaProvider({ baseUrl: "http://h", model: "m", numCtx: 4096 });
+    expect(small.promptTokenBudget).toBe(4096 - OUTPUT_RESERVE_TOKENS);
+  });
+
+  it("accepts a normal complete response", async () => {
+    expect(await ask(chatBody('{"ok":true}'))).toEqual({ ok: true });
+  });
+
+  it("rejects an answer that stopped at a length limit as invalid_output", async () => {
+    const body = chatBody('{"requiredSkills":[{"name":"Ty', {
+      done_reason: "length",
+      prompt_eval_count: 900,
+      eval_count: 600,
+    });
+    expect(await codeOf(ask(body))).toBe("invalid_output");
+  });
+
+  it("never returns a length-stopped answer even when its JSON happens to be complete", async () => {
+    const body = chatBody('{"ok":true}', { done_reason: "length" });
+    expect(await codeOf(ask(body))).toBe("invalid_output");
+  });
+
+  it.each(["load", "unload", "", "STOP", "other"])(
+    "rejects done_reason %j as invalid_output",
+    async (reason) => {
+      expect(await codeOf(ask(chatBody("{}", { done_reason: reason })))).toBe("invalid_output");
+    },
+  );
+
+  it("rejects a response with no done_reason: completion cannot be confirmed", async () => {
+    expect(await codeOf(ask(chatBody("{}", { done_reason: undefined })))).toBe("invalid_output");
+  });
+
+  it("reports a length stop with a full window as too_long, because the input is the problem", async () => {
+    const body = chatBody("{", {
+      done_reason: "length",
+      prompt_eval_count: full - 10,
+      eval_count: 10,
+    });
+    expect(await codeOf(ask(body))).toBe("too_long");
+  });
+
+  it("rejects a near-full window as too_long even when generation finished normally", async () => {
+    const body = chatBody('{"ok":true}', { prompt_eval_count: threshold - 300, eval_count: 300 });
+    expect(await codeOf(ask(body))).toBe("too_long");
+  });
+
+  it("accepts usage just below the near-full threshold", async () => {
+    const body = chatBody('{"ok":true}', { prompt_eval_count: threshold - 301, eval_count: 300 });
+    expect(await ask(body)).toEqual({ ok: true });
+  });
+
+  it("uses the prompt count alone when eval_count is missing", async () => {
+    expect(
+      await codeOf(ask(chatBody("{}", { prompt_eval_count: full, eval_count: undefined }))),
+    ).toBe("too_long");
+    expect(await ask(chatBody("{}", { prompt_eval_count: 500, eval_count: undefined }))).toEqual(
+      {},
+    );
+  });
+
+  it("skips the window check when token counts are missing, and still requires a stop", async () => {
+    const noUsage = { prompt_eval_count: undefined, eval_count: undefined };
+    expect(await ask(chatBody("{}", noUsage))).toEqual({});
+    expect(await codeOf(ask(chatBody("{}", { ...noUsage, done_reason: "length" })))).toBe(
+      "invalid_output",
+    );
+  });
+
+  it.each([
+    ["negative prompt_eval_count", { prompt_eval_count: -1 }],
+    ["fractional eval_count", { eval_count: 1.5 }],
+    ["string prompt_eval_count", { prompt_eval_count: "1200" }],
+    ["non-string done_reason", { done_reason: 1 }],
+  ])("rejects malformed usage metadata (%s) as invalid_output", async (_name, extra) => {
+    expect(await codeOf(ask(chatBody("{}", extra)))).toBe("invalid_output");
+  });
+
+  it("checks completeness before parsing the content, so truncated JSON is not misreported", async () => {
+    const body = chatBody("not even json {", { done_reason: "length" });
+    expect(await codeOf(ask(body))).toBe("invalid_output");
+    const full_ = chatBody("not even json {", { prompt_eval_count: full });
+    expect(await codeOf(ask(full_))).toBe("too_long");
+  });
+
+  it("still maps malformed JSON content and a schema-shape failure to invalid_output", async () => {
+    expect(await codeOf(ask(chatBody("{broken")))).toBe("invalid_output");
+    expect(
+      await codeOf(ask(JSON.stringify({ message: { content: {} }, done_reason: "stop" }))),
+    ).toBe("invalid_output");
+  });
+
+  it("keeps the existing error mappings and size limit", async () => {
+    expect(
+      await codeOf(provider(respond("{}", { status: 404 }) as never).generateStructured(request())),
+    ).toBe("model_unavailable");
+    expect(
+      await codeOf(provider(respond("{}", { status: 500 }) as never).generateStructured(request())),
+    ).toBe("provider_unavailable");
+    const huge = chatBody(JSON.stringify({ pad: "a".repeat(MAX_RESPONSE_CHARS) }));
+    expect(await codeOf(ask(huge))).toBe("invalid_output");
   });
 });

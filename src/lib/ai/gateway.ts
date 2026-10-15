@@ -1,14 +1,20 @@
 import { z } from "zod";
 import { AI_ERROR_CODES, AiError, type AiErrorCode } from "./errors";
 import { type Logger, log as defaultLogger } from "@/lib/log";
+import { estimatePromptTokens } from "./token-estimate";
 import type { AiGateway, AiResult, AiResultMeta, GenerateRequest, LlmProvider } from "./types";
 
 export type GatewayOptions = {
   provider: LlmProvider;
   /** Upper bound for one provider call. */
   timeoutMs: number;
-  /** Largest prompt (system plus user, in characters) sent to a provider. */
+  /** Outer bound on the prompt (system plus user, in characters), whatever the provider. */
   maxPromptChars?: number;
+  /**
+   * Largest estimated prompt in tokens. Defaults to the provider's own budget; providers
+   * without a context limit are not token-checked.
+   */
+  maxPromptTokens?: number;
   logger?: Logger;
 };
 
@@ -35,6 +41,7 @@ function isErrorCode(value: unknown): value is AiErrorCode {
 export function createAiGateway(options: GatewayOptions): AiGateway {
   const { provider, timeoutMs } = options;
   const maxPromptChars = options.maxPromptChars ?? DEFAULT_MAX_PROMPT_CHARS;
+  const maxPromptTokens = options.maxPromptTokens ?? provider.promptTokenBudget ?? null;
   const logger = options.logger ?? defaultLogger;
 
   return {
@@ -58,6 +65,13 @@ export function createAiGateway(options: GatewayOptions): AiGateway {
       };
 
       if (request.system.length + request.user.length > maxPromptChars) return fail("too_long");
+      // Refuse, never truncate: input that cannot fit the context is reported, not cut down.
+      if (
+        maxPromptTokens !== null &&
+        estimatePromptTokens(request.system, request.user) > maxPromptTokens
+      ) {
+        return fail("too_long");
+      }
 
       const signal = AbortSignal.timeout(timeoutMs);
       let raw: unknown;

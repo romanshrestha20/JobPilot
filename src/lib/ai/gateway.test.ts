@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AiError } from "./errors";
 import { createAiGateway } from "./gateway";
 import { createLogger } from "@/lib/log";
+import { estimatePromptTokens } from "./token-estimate";
 import type { LlmProvider, ProviderRequest } from "./types";
 
 const schema = z.strictObject({ n: z.number().int().max(10), tags: z.array(z.string()).max(2) });
@@ -175,5 +176,126 @@ describe("AI gateway", () => {
     });
     expect(demoSpy).not.toHaveBeenCalled();
     expect(demo.name).toBe("demo");
+  });
+});
+
+describe("AI gateway: estimated token budget (mocked providers)", () => {
+  const withBudget = (promptTokenBudget: number | null | undefined) => {
+    const calls: ProviderRequest[] = [];
+    const provider: LlmProvider = {
+      name: "ollama",
+      model: "qwen-test",
+      promptTokenBudget,
+      generateStructured: async (request) => {
+        calls.push(request);
+        return { n: 1, tags: [] };
+      },
+    };
+    return { provider, calls };
+  };
+  const system = "You extract things.";
+  const userOf = (letters: number) => "a".repeat(letters);
+  const run = (gateway: ReturnType<typeof createAiGateway>, letters: number) =>
+    ask(gateway, { system, user: userOf(letters) });
+
+  /** Largest number of letters whose estimated prompt still fits `budget`. */
+  function largestFitting(budget: number) {
+    let low = 0;
+    let high = 200_000;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (estimatePromptTokens(system, userOf(mid)) <= budget) low = mid;
+      else high = mid - 1;
+    }
+    return low;
+  }
+
+  it("accepts input just below the budget and refuses just above it, without calling the provider", async () => {
+    const { provider, calls } = withBudget(2000);
+    const gateway = createAiGateway({
+      provider,
+      timeoutMs: 1000,
+      maxPromptChars: 1_000_000,
+      logger: silent,
+    });
+    const fit = largestFitting(2000);
+
+    expect((await run(gateway, fit)).ok).toBe(true);
+    expect(calls).toHaveLength(1);
+
+    const over = await run(gateway, fit + 1);
+    expect(over).toMatchObject({ ok: false, code: "too_long" });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("counts the system prompt: a user text that fits alone is refused with a larger system prompt", async () => {
+    const { provider, calls } = withBudget(1000);
+    const gateway = createAiGateway({
+      provider,
+      timeoutMs: 1000,
+      maxPromptChars: 1_000_000,
+      logger: silent,
+    });
+    const user = userOf(largestFitting(1000));
+    expect((await ask(gateway, { system, user })).ok).toBe(true);
+    const result = await ask(gateway, { system: system + "x".repeat(400), user });
+    expect(result).toMatchObject({ ok: false, code: "too_long" });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("does not truncate or rewrite what it sends", async () => {
+    const { provider, calls } = withBudget(5000);
+    const gateway = createAiGateway({ provider, timeoutMs: 1000, logger: silent });
+    const user = userOf(500);
+    await ask(gateway, { system, user });
+    expect(calls[0].user).toBe(user);
+    expect(calls[0].system).toBe(system);
+  });
+
+  it("does not token-check a provider without a budget (demo)", async () => {
+    for (const budget of [undefined, null]) {
+      const { provider, calls } = withBudget(budget);
+      const gateway = createAiGateway({ provider, timeoutMs: 1000, logger: silent });
+      expect((await run(gateway, 9000)).ok).toBe(true);
+      expect(calls).toHaveLength(1);
+    }
+  });
+
+  it("lets an explicit maxPromptTokens override the provider budget", async () => {
+    const { provider, calls } = withBudget(1_000_000);
+    const gateway = createAiGateway({
+      provider,
+      timeoutMs: 1000,
+      maxPromptTokens: 300,
+      logger: silent,
+    });
+    expect(await run(gateway, 5000)).toMatchObject({ ok: false, code: "too_long" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("keeps the flat character cap as an outer bound", async () => {
+    const { provider, calls } = withBudget(1_000_000);
+    const gateway = createAiGateway({
+      provider,
+      timeoutMs: 1000,
+      maxPromptChars: 100,
+      logger: silent,
+    });
+    expect(await run(gateway, 200)).toMatchObject({ ok: false, code: "too_long" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("logs the refusal with the code only, never the prompt", async () => {
+    const lines: string[] = [];
+    const { provider } = withBudget(100);
+    const gateway = createAiGateway({
+      provider,
+      timeoutMs: 1000,
+      logger: createLogger((_level, line) => lines.push(line)),
+    });
+    await ask(gateway, { system: "SECRET-SYSTEM", user: "SECRET-USER ".repeat(200) });
+    const text = lines.join("\n");
+    expect(text).toContain("too_long");
+    expect(text).not.toContain("SECRET");
   });
 });
