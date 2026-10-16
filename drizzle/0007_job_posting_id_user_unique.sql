@@ -1,0 +1,1 @@
+ALTER TABLE "job_posting" ADD CONSTRAINT "job_posting_id_user_id_unique" UNIQUE("id","user_id");

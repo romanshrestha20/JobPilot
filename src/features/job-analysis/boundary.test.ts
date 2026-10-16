@@ -26,8 +26,12 @@ describe("Phase 2A boundaries", () => {
     }
   });
 
-  it("the AI layer and job-analysis never import the database or schema", () => {
-    for (const file of [...aiFiles, ...analysisFiles]) {
+  // Persistence files may use Drizzle and the shared schema. Everything else stays pure.
+  const persistenceFiles = new Set(["src/features/job-analysis/schema.ts"]);
+  const pureAnalysisFiles = analysisFiles.filter((file) => !persistenceFiles.has(file));
+
+  it("the AI layer and the pure parts of job-analysis never import the database or schema", () => {
+    for (const file of [...aiFiles, ...pureAnalysisFiles]) {
       for (const specifier of importsOf(read(file))) {
         expect(specifier, file).not.toMatch(/^@\/lib\/(db|schema)$|drizzle|^postgres$/);
       }
@@ -35,8 +39,14 @@ describe("Phase 2A boundaries", () => {
   });
 
   it("job-analysis imports no other feature and no framework code", () => {
+    // The one exception: the schema references job_posting for its composite foreign key.
+    const allowed = new Set(["@/features/job-intake/schema"]);
     for (const file of analysisFiles) {
       for (const specifier of importsOf(read(file))) {
+        if (allowed.has(specifier)) {
+          expect(file).toBe("src/features/job-analysis/schema.ts");
+          continue;
+        }
         expect(specifier, file).not.toMatch(/^@\/features\/|^next(\/|$)|^react/);
       }
     }

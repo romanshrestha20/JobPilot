@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { user } from "@/lib/schema";
 import { JOB_STATUSES } from "./validation";
 
@@ -23,6 +23,10 @@ export const jobPosting = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    // Target of job_analysis's composite foreign key (job_id, user_id), so an analysis can
+    // never point at another user's posting. Redundant with the primary key as a uniqueness
+    // rule; PostgreSQL needs it to reference the pair.
+    unique("job_posting_id_user_id_unique").on(table.id, table.userId),
     // Serves "my jobs, newest first" without scanning other users' rows.
     index("job_posting_user_id_created_at_idx").on(table.userId, table.createdAt.desc()),
     // `[^[:space:]]` = at least one non-whitespace character (btrim only strips spaces, not
