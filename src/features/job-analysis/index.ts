@@ -49,3 +49,28 @@ export {
   ANALYSIS_RETRY_LIMIT,
   analysisExpireInSeconds,
 } from "./domain/processing-policy";
+
+// Scoring surface for the matching module (src/features/job-matching). Pure values and
+// functions; the caller passes the profile in as an explicit argument.
+export { scoreMatch } from "./domain/score-match";
+export type {
+  ComponentResult,
+  MatchBreakdown,
+  MatchProfile,
+  MatchStatus,
+  SkillResult,
+} from "./domain/score-match";
+export {
+  COMPONENT_LABELS,
+  INSUFFICIENT_INFORMATION_MESSAGE,
+  JOB_NOT_STATED_TEXT,
+  MATCH_DISCLAIMER,
+  MATCH_VERSION,
+  MIN_COVERAGE,
+  MISSING_PROFILE_TEXT,
+  NOT_ASSESSABLE_TEXT,
+  NO_REQUIREMENTS_MESSAGE,
+} from "./domain/match-v1";
+export type { MissingProfileItem } from "./domain/match-v1";
+export { SKILL_STATE_REASONS } from "./domain/skill-state";
+export type { SkillState } from "./domain/skill-state";
