@@ -38,3 +38,20 @@ export const RETRYABLE_FAILURES = [
 export function isRetryableFailure(code: FailureCode): boolean {
   return (RETRYABLE_FAILURES as readonly string[]).includes(code);
 }
+
+/** Failures a new run cannot fix, so the UI does not offer Retry for them. */
+export const PERMANENT_FAILURES = [
+  "too_long",
+  "job_missing",
+] as const satisfies readonly FailureCode[];
+
+/** Whether the user may start a new run after this failure (including a lost queue). */
+export function userCanRetry(code: FailureCode): boolean {
+  return !(PERMANENT_FAILURES as readonly string[]).includes(code);
+}
+
+/**
+ * Runs one user may request in a rolling 24-hour window: any run created in the last 24 hours
+ * counts, so there is no midnight reset (docs/ai-architecture.md section 13, item 8).
+ */
+export const ANALYSIS_DAILY_LIMIT = 20;

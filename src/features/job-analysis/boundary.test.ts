@@ -27,7 +27,10 @@ describe("Phase 2A boundaries", () => {
   });
 
   // Persistence files may use Drizzle and the shared schema. Everything else stays pure.
-  const persistenceFiles = new Set(["src/features/job-analysis/schema.ts"]);
+  const persistenceFiles = new Set([
+    "src/features/job-analysis/schema.ts",
+    "src/features/job-analysis/repository.ts",
+  ]);
   const pureAnalysisFiles = analysisFiles.filter((file) => !persistenceFiles.has(file));
 
   it("the AI layer and the pure parts of job-analysis never import the database or schema", () => {

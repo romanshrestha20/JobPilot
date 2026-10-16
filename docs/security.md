@@ -101,7 +101,7 @@ Job descriptions are written by third parties and are untrusted. They may contai
 Model calls are expensive and can be used to exhaust the host. Proposed limits, enforced in the Server Action and verified by tests:
 
 - At most **one active run per job** (database partial unique index).
-- A **daily cap per user** (proposed 20 runs), counted from `job_analysis` rows.
+- A **cap per user of 20 runs in a rolling 24-hour window** (not a calendar day), counted from `job_analysis` rows; runs that failed with `enqueue_failed` do not count.
 - The existing job description limit (20,000 characters) bounds the input; longer text is rejected rather than silently truncated.
 - A bounded queue size and worker concurrency; a per-call timeout.
 - Existing sign-in and sign-up limits are unchanged and unrelated.

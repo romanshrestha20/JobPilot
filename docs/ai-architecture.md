@@ -419,7 +419,7 @@ Unit tests for deterministic rules must never call a live model (`AGENTS.md`).
 5. ~~Whether `LLM_PROVIDER=demo` is allowed in production.~~ Decided: rejected, no override.
 6. ~~Module name.~~ Decided: `job-analysis` for extraction; matching and scoring come later. Still open: whether `job_requirement` and `match_result` are folded into one `job_analysis` table as proposed.
 7. ~~Starter dictionary.~~ Decided: small, explicit and versioned (`skills-v1`). Still open: who maintains it and when it moves to tables.
-8. Per-user rate limits (proposed: one active run per job, and a daily cap of 20 runs per user).
+8. ~~Per-user rate limits.~~ Decided: one active run per job, and a cap of 20 runs per user in a **rolling 24-hour window** (not a calendar day, so there is no midnight reset). A run counts when its `created_at` is within the last 24 hours, whatever its status, except runs that failed with `enqueue_failed`, which never started. The check and the insert run under a per-user advisory lock.
 
 ## 14. Delivery order
 

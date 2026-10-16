@@ -76,3 +76,34 @@ export type GroundedRequirements = {
   /** Items the model claimed that the job text does not support. They are removed, not kept. */
   droppedUngrounded: number;
 };
+
+const groundedSkillSchema = z.strictObject({
+  key: z.string().min(1).max(REQUIREMENT_LIMITS.skillName),
+  name: cleanText(REQUIREMENT_LIMITS.skillName),
+  mapped: z.boolean(),
+  quote: cleanText(REQUIREMENT_LIMITS.quote),
+});
+
+/**
+ * The shape stored in `job_analysis.requirements`. The worker validates a result against it
+ * before saving, and reading validates again, so a damaged or hand-edited row is refused
+ * instead of being scored.
+ */
+export const groundedRequirementsSchema = z.strictObject({
+  schemaVersion: z.literal(REQUIREMENTS_SCHEMA_VERSION),
+  dictionaryVersion: z.string().min(1).max(50),
+  requiredSkills: z.array(groundedSkillSchema).max(REQUIREMENT_LIMITS.skills),
+  preferredSkills: z.array(groundedSkillSchema).max(REQUIREMENT_LIMITS.skills),
+  minYearsExperience: z.number().int().min(0).max(REQUIREMENT_LIMITS.maxYears).nullable(),
+  languages: z
+    .array(
+      z.strictObject({
+        language: cleanText(REQUIREMENT_LIMITS.language),
+        required: z.boolean(),
+      }),
+    )
+    .max(REQUIREMENT_LIMITS.languages),
+  workMode: z.enum(["remote", "hybrid", "onsite"]).nullable(),
+  locations: z.array(cleanText(REQUIREMENT_LIMITS.location)).max(REQUIREMENT_LIMITS.locations),
+  droppedUngrounded: z.number().int().min(0),
+});
