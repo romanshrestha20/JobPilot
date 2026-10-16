@@ -11,6 +11,7 @@ import { DeleteJobForm, JobStatusBadge, JobStatusForm, getMyJob } from "@/featur
 import { requireUser } from "@/features/identity/server";
 import { linkClass } from "@/components/ui/link";
 import { AnalysisPanel } from "./_analysis/analysis-panel";
+import { MatchPanel } from "./_analysis/match-panel";
 
 export const metadata = { title: "Job · JobPilot" };
 
@@ -107,6 +108,13 @@ async function JobContent({ params, searchParams }: Props) {
         <CardContent>
           <Suspense fallback={<LoadingState label="Loading analysis…" />}>
             <AnalysisPanel userId={user.id} jobId={job.id} />
+          </Suspense>
+        </CardContent>
+      </Card>
+      <Card className="mt-6">
+        <CardContent>
+          <Suspense fallback={<LoadingState label="Loading match…" />}>
+            <MatchPanel userId={user.id} jobId={job.id} />
           </Suspense>
         </CardContent>
       </Card>
