@@ -66,9 +66,50 @@ describe("Phase 2A boundaries", () => {
     }
   });
 
-  it("adds no queue, worker or persistence code in Phase 2A", () => {
+  it("job-analysis stays queue-agnostic: it never imports pg-boss or a database driver", () => {
     for (const file of [...aiFiles, ...analysisFiles]) {
-      expect(read(file), file).not.toMatch(/pg-boss|pgboss|from\s+["']postgres["']/);
+      for (const specifier of importsOf(read(file))) {
+        expect(specifier, file).not.toMatch(/^pg-boss$|^postgres$/);
+      }
     }
+  });
+
+  describe("Phase 2B worker boundaries", () => {
+    const allSource = sourceFiles("src");
+
+    it("only src/lib/queue.ts imports pg-boss", () => {
+      for (const file of allSource) {
+        const uses = importsOf(read(file)).includes("pg-boss");
+        expect(uses, file).toBe(file === "src/lib/queue.ts");
+      }
+    });
+
+    it("the queue wrapper and the worker never import candidate profile or skill code", () => {
+      for (const file of [
+        ...allSource.filter((f) => f.startsWith("src/worker/")),
+        "src/lib/queue.ts",
+      ]) {
+        for (const specifier of importsOf(read(file))) {
+          expect(specifier, file).not.toMatch(/candidate-profile|candidate_skill|identity/);
+        }
+      }
+    });
+
+    it("the worker reads jobs only through job-intake's narrow reader, never its UI or global db", () => {
+      for (const file of allSource.filter((f) => f.startsWith("src/worker/"))) {
+        for (const specifier of importsOf(read(file))) {
+          expect(specifier, file).not.toMatch(/^@\/lib\/db$|^@\/features\/job-intake$/);
+          if (specifier.startsWith("@/features/job-intake")) {
+            expect(specifier, file).toBe("@/features/job-intake/reader");
+          }
+        }
+      }
+    });
+
+    it("the narrow job reader imports no UI, actions, framework or global db", () => {
+      for (const specifier of importsOf(read("src/features/job-intake/reader.ts"))) {
+        expect(specifier).not.toMatch(/^next|^react|actions|\/ui\/|^@\/lib\/db$|^@\/lib\/env$/);
+      }
+    });
   });
 });

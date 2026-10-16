@@ -19,3 +19,26 @@ export { DEMO_LABEL } from "./domain/demo-extraction";
 export { MAX_JOB_TEXT_CHARS } from "./application/extract";
 export type { ExtractionErrorCode, ExtractionResult } from "./application/extract";
 export type { GroundedRequirements, GroundedSkill } from "./domain/requirements";
+
+// Public surface for the worker's composition root (src/worker). The pure parts take their
+// dependencies as arguments; only the repository needs a database, supplied by the caller.
+export { createAnalysisRepository } from "./repository";
+export type { AnalysisRepository } from "./repository";
+export { createAnalysisService } from "./application/analysis-service";
+export type { AnalysisQueue, JobReader } from "./application/analysis-service";
+export {
+  ANALYSIS_QUEUE_NAME,
+  analysisPayloadSchema,
+  createAnalysisQueue,
+} from "./application/analysis-queue";
+export type { QueueSender } from "./application/analysis-queue";
+export { createAnalysisProcessor } from "./application/process-analysis";
+export type { AnalysisProcessor, ProcessOutcome } from "./application/process-analysis";
+export { createStaleRecovery } from "./application/recover-stale";
+export type { RecoveryResult, StaleRecovery } from "./application/recover-stale";
+export {
+  ANALYSIS_RETRY_DELAY_MAX_SECONDS,
+  ANALYSIS_RETRY_DELAY_SECONDS,
+  ANALYSIS_RETRY_LIMIT,
+  analysisExpireInSeconds,
+} from "./domain/processing-policy";

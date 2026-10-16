@@ -11,7 +11,16 @@ export const ACTIVE_STATUSES = [
   "processing",
 ] as const satisfies readonly AnalysisStatus[];
 
-/** Why a run ended in `failed`. Never carries provider text, only this code. */
+/**
+ * Why a run ended in `failed`. Never carries provider text, only this code.
+ * - `timeout`, `provider_unavailable`, `model_unavailable`, `invalid_output`: the cause of the
+ *   last attempt, kept when retries run out.
+ * - `retries_exhausted`: every attempt was used without a result and no cause was recorded
+ *   (the worker stopped answering, or the queue delivered past the limit).
+ * - `enqueue_failed`: the queue never took, or never ran, the job.
+ * - `job_missing`: the job was deleted or is not the owner's. `empty_input`: the job exists but
+ *   its description has no usable text.
+ */
 export const FAILURE_CODES = [
   "provider_unavailable",
   "model_unavailable",
@@ -20,6 +29,8 @@ export const FAILURE_CODES = [
   "too_long",
   "enqueue_failed",
   "job_missing",
+  "empty_input",
+  "retries_exhausted",
 ] as const;
 export type FailureCode = (typeof FAILURE_CODES)[number];
 
@@ -43,6 +54,7 @@ export function isRetryableFailure(code: FailureCode): boolean {
 export const PERMANENT_FAILURES = [
   "too_long",
   "job_missing",
+  "empty_input",
 ] as const satisfies readonly FailureCode[];
 
 /** Whether the user may start a new run after this failure (including a lost queue). */

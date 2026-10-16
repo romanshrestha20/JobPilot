@@ -25,6 +25,8 @@ let racePool: ReturnType<typeof postgres>;
 let repository: ReturnType<typeof createAnalysisRepository>;
 let raceRepository: ReturnType<typeof createAnalysisRepository>;
 const createdUsers: string[] = [];
+/** Never reclaim a processing run: only pending ones can be claimed. */
+const NO_RECLAIM = { reclaimBefore: new Date(0) };
 
 const REQUIREMENTS: GroundedRequirements = {
   schemaVersion: 1,
@@ -225,7 +227,7 @@ describe("state machine", () => {
     const alice = await newUser("alice");
     const { id } = await pendingRun(alice.id);
 
-    const claimed = await repository.claim(alice.id, id);
+    const claimed = await repository.claim(alice.id, id, NO_RECLAIM);
     expect(claimed).toMatchObject({ status: "processing", attempts: 1 });
     expect(claimed?.startedAt).not.toBeNull();
 
@@ -235,14 +237,60 @@ describe("state machine", () => {
     expect(done?.completedAt).not.toBeNull();
   });
 
-  it("a repeated delivery re-claims a processing run and counts the attempt", async () => {
+  it("a duplicate delivery cannot claim a run another delivery is working on", async () => {
     const alice = await newUser("alice");
     const { id } = await pendingRun(alice.id);
-    await repository.claim(alice.id, id);
-    expect(await repository.claim(alice.id, id)).toMatchObject({
+    await repository.claim(alice.id, id, NO_RECLAIM);
+    expect(await repository.claim(alice.id, id, NO_RECLAIM)).toBeNull();
+    expect(await repository.findForUser(alice.id, id)).toMatchObject({
+      status: "processing",
+      attempts: 1,
+    });
+  });
+
+  it("a processing run idle past the cutoff (its worker died) is claimed again and counted", async () => {
+    const alice = await newUser("alice");
+    const { id } = await pendingRun(alice.id);
+    await repository.claim(alice.id, id, NO_RECLAIM);
+    const future = { reclaimBefore: new Date(Date.now() + 60_000) };
+    expect(await repository.claim(alice.id, id, future)).toMatchObject({
       status: "processing",
       attempts: 2,
     });
+  });
+
+  it("ten simultaneous claims of one pending run: exactly one wins", async () => {
+    const alice = await newUser("alice");
+    const { id } = await pendingRun(alice.id);
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => raceRepository.claim(alice.id, id, NO_RECLAIM)),
+    );
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await repository.findForUser(alice.id, id)).toMatchObject({ attempts: 1 });
+  });
+
+  it("release hands a processing run back, only for the attempt that holds it", async () => {
+    const alice = await newUser("alice");
+    const bob = await newUser("bob");
+    const { id } = await pendingRun(alice.id);
+    await repository.claim(alice.id, id, NO_RECLAIM);
+    expect(await repository.release(alice.id, id, 2)).toBeNull(); // wrong attempt
+    expect(await repository.release(bob.id, id, 1)).toBeNull(); // wrong owner
+    expect(await repository.release(alice.id, id, 1)).toMatchObject({
+      status: "pending",
+      attempts: 1,
+    });
+    expect(await repository.release(alice.id, id, 1)).toBeNull(); // no longer processing
+    expect(await repository.claim(alice.id, id, NO_RECLAIM)).toMatchObject({ attempts: 2 });
+  });
+
+  it("release cannot reopen a finished run", async () => {
+    const alice = await newUser("alice");
+    const { id } = await pendingRun(alice.id);
+    await repository.claim(alice.id, id, NO_RECLAIM);
+    await repository.complete(alice.id, id, result("We need Go."));
+    expect(await repository.release(alice.id, id, 1)).toBeNull();
+    expect(await repository.findForUser(alice.id, id)).toMatchObject({ status: "completed" });
   });
 
   it("cannot complete a run that was never claimed", async () => {
@@ -255,10 +303,10 @@ describe("state machine", () => {
   it("a finished run cannot be claimed, completed again, failed or overwritten", async () => {
     const alice = await newUser("alice");
     const { id } = await pendingRun(alice.id);
-    await repository.claim(alice.id, id);
+    await repository.claim(alice.id, id, NO_RECLAIM);
     await repository.complete(alice.id, id, result("We need Go."));
 
-    expect(await repository.claim(alice.id, id)).toBeNull();
+    expect(await repository.claim(alice.id, id, NO_RECLAIM)).toBeNull();
     expect(await repository.complete(alice.id, id, result("Different."))).toBeNull();
     expect(await repository.fail(alice.id, id, "timeout")).toBeNull();
     const row = await repository.findForUser(alice.id, id);
@@ -269,12 +317,12 @@ describe("state machine", () => {
   it("a failed run cannot be claimed or completed by a late delivery", async () => {
     const alice = await newUser("alice");
     const { id } = await pendingRun(alice.id);
-    await repository.claim(alice.id, id);
+    await repository.claim(alice.id, id, NO_RECLAIM);
     expect(await repository.fail(alice.id, id, "provider_unavailable")).toMatchObject({
       status: "failed",
       failureCode: "provider_unavailable",
     });
-    expect(await repository.claim(alice.id, id)).toBeNull();
+    expect(await repository.claim(alice.id, id, NO_RECLAIM)).toBeNull();
     expect(await repository.complete(alice.id, id, result("We need Go."))).toBeNull();
     expect(await repository.fail(alice.id, id, "timeout")).toBeNull();
     expect(await repository.findForUser(alice.id, id)).toMatchObject({
@@ -295,7 +343,7 @@ describe("state machine", () => {
   it("two simultaneous completions: exactly one wins", async () => {
     const alice = await newUser("alice");
     const { id } = await pendingRun(alice.id);
-    await repository.claim(alice.id, id);
+    await repository.claim(alice.id, id, NO_RECLAIM);
     const results = await Promise.all(
       ["First.", "Second.", "Third.", "Fourth."].map((text) =>
         raceRepository.complete(alice.id, id, result(text)),
@@ -319,8 +367,8 @@ describe("ownership", () => {
       latest: null,
       latestCompleted: null,
     });
-    expect(await repository.claim(bob.id, id)).toBeNull();
-    await repository.claim(alice.id, id);
+    expect(await repository.claim(bob.id, id, NO_RECLAIM)).toBeNull();
+    await repository.claim(alice.id, id, NO_RECLAIM);
     expect(await repository.complete(bob.id, id, result("We need Go."))).toBeNull();
     expect(await repository.fail(bob.id, id, "timeout")).toBeNull();
     expect(await repository.findForUser(alice.id, id)).toMatchObject({
@@ -336,7 +384,7 @@ describe("ownership", () => {
     if (outcome.kind !== "created") throw new Error("expected created");
     for (const userId of ["", "%", "alice", "' OR '1'='1", alice.id.toUpperCase()]) {
       expect(await repository.findForUser(userId, outcome.record.id)).toBeNull();
-      expect(await repository.claim(userId, outcome.record.id)).toBeNull();
+      expect(await repository.claim(userId, outcome.record.id, NO_RECLAIM)).toBeNull();
     }
   });
 
@@ -345,7 +393,7 @@ describe("ownership", () => {
     const jobId = await newJob(alice.id);
     const first = await repository.createPendingForUser(alice.id, jobId, { dailyLimit: 20 });
     if (first.kind !== "created") throw new Error("expected created");
-    await repository.claim(alice.id, first.record.id);
+    await repository.claim(alice.id, first.record.id, NO_RECLAIM);
     await repository.complete(alice.id, first.record.id, result("We need Go."));
 
     const second = await repository.createPendingForUser(alice.id, jobId, { dailyLimit: 20 });
@@ -420,7 +468,7 @@ describe("analysis service with the real repository", () => {
     });
     const requested = await service.requestAnalysis(alice, jobId);
     if (!requested.ok) throw new Error("expected ok");
-    await repository.claim(alice.id, requested.analysis.id);
+    await repository.claim(alice.id, requested.analysis.id, NO_RECLAIM);
     await repository.complete(alice.id, requested.analysis.id, result("We need Go."));
 
     expect((await service.getMyAnalysisView(alice, jobId))?.stale).toBe(false);

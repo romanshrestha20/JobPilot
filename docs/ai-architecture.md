@@ -12,7 +12,7 @@ Related documents: `docs/architecture.md` (system and module boundaries), `docs/
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Configuration names `OLLAMA_URL`, `LLM_PROVIDER` (`ollama` or `demo`), `LLM_MODEL`, `EMBED_MODEL` | Validated and read by `src/lib/ai` (Phase 2A); `EMBED_MODEL` is still unused                                                                | `src/lib/env.ts`; no other file references them                          |
 | AI gateway, `ollama` and `demo` providers, requirements extraction                                | Implemented (Phase 2A); nothing calls it from the application yet                                                                           | `src/lib/ai/`, `src/features/job-analysis/`                              |
-| Queue, worker, pg-boss                                                                            | Not implemented                                                                                                                             | no dependency in `package.json`                                          |
+| Queue, worker, pg-boss                                                                            | Implemented (Phase 2B step 5): `src/lib/queue.ts`, `src/worker/`, `pnpm worker`; not yet called by any Server Action or UI                  | `pg-boss` 12.38 in `package.json`; tests in `src/worker/`                |
 | Candidate skills                                                                                  | Implemented: name, optional level, years and evidence, at most 50 per user, one per lowercase key; no alias dictionary                      | `candidate_skill` in `src/features/candidate-profile/`, migration `0006` |
 | Persistence, UI, scoring                                                                          | Not implemented (extraction only)                                                                                                           | no `job_analysis` table, no analysis UI, no scoring code                 |
 | pgvector                                                                                          | Extension enabled only; no vector columns                                                                                                   | `drizzle/0000_enable-pgvector.sql`                                       |
@@ -302,19 +302,19 @@ The architecture's step 6 (an AI-written explanation) is **not part of the first
 
 ### 8.1 Table `job_analysis`
 
-| Column                                                                | Notes                                                                                                                                  |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                                                                  | uuid, primary key                                                                                                                      |
-| `user_id`                                                             | text, not null, references `user.id`, `ON DELETE CASCADE`                                                                              |
-| `job_id`                                                              | uuid, not null, references `job_posting.id`, `ON DELETE CASCADE`                                                                       |
-| `status`                                                              | `pending`, `processing`, `completed`, `failed` (CHECK)                                                                                 |
-| `description_hash`                                                    | sha256 of the normalized description the run used                                                                                      |
-| `prompt_version`, `provider`, `model`                                 | provenance; `model` is null for `demo`                                                                                                 |
-| `requirements`                                                        | jsonb, the grounded and normalized `JobRequirements`; set if and only if `completed` (CHECK)                                           |
-| `dropped_ungrounded`                                                  | integer, diagnostics                                                                                                                   |
-| `failure_code`                                                        | CHECK against `provider_unavailable`, `timeout`, `invalid_output`, `too_long`, `enqueue_failed`, `job_missing`; set only when `failed` |
-| `attempts`                                                            | integer, incremented when a worker claims the row                                                                                      |
-| `queued_at`, `started_at`, `completed_at`, `created_at`, `updated_at` | `timestamptz`                                                                                                                          |
+| Column                                                                | Notes                                                                                                                                                                                                              |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                                                                  | uuid, primary key                                                                                                                                                                                                  |
+| `user_id`                                                             | text, not null, references `user.id`, `ON DELETE CASCADE`                                                                                                                                                          |
+| `job_id`                                                              | uuid, not null, references `job_posting.id`, `ON DELETE CASCADE`                                                                                                                                                   |
+| `status`                                                              | `pending`, `processing`, `completed`, `failed` (CHECK)                                                                                                                                                             |
+| `description_hash`                                                    | sha256 of the normalized description the run used                                                                                                                                                                  |
+| `prompt_version`, `provider`, `model`                                 | provenance; `model` is null for `demo`                                                                                                                                                                             |
+| `requirements`                                                        | jsonb, the grounded and normalized `JobRequirements`; set if and only if `completed` (CHECK)                                                                                                                       |
+| `dropped_ungrounded`                                                  | integer, diagnostics                                                                                                                                                                                               |
+| `failure_code`                                                        | CHECK against `provider_unavailable`, `model_unavailable`, `timeout`, `invalid_output`, `too_long`, `enqueue_failed`, `job_missing`, `empty_input`, `retries_exhausted` (migration `0009`); set only when `failed` |
+| `attempts`                                                            | integer, incremented when a worker claims the row                                                                                                                                                                  |
+| `queued_at`, `started_at`, `completed_at`, `created_at`, `updated_at` | `timestamptz`                                                                                                                                                                                                      |
 
 - **Ownership is enforced in SQL.** `job_posting` gains `UNIQUE (id, user_id)`, and `job_analysis` has a composite foreign key `(job_id, user_id)` to it, so an analysis can never point at a job owned by someone else. This is a schema change to `job_posting` and ships in its own reviewed, forward-only migration.
 - Indexes: `(user_id, job_id, created_at DESC)`, and a partial unique index allowing **one active run per job** (`status IN ('pending', 'processing')`).
@@ -356,25 +356,53 @@ src/features/candidate-profile/   gains candidate_skill (schema, validation, rep
 
 `job-analysis` implements the ownership that `docs/architecture.md` splits between `jobs` (requirements) and `matching` (score): extraction results, grounding and scoring live together because they share one versioned lifecycle. This is a refinement, flagged in section 13. The planned `job_requirement` and `match_result` tables are replaced for the first version by the `requirements` column and compute-on-read scoring.
 
-## 10. Queue and worker (planned; decision record: `docs/decisions/0001-pg-boss.md`)
+## 10. Queue and worker (implemented; decision record: `docs/decisions/0001-pg-boss.md`)
+
+Verified against pg-boss 12.38.0 (`node_modules/pg-boss/dist/types.d.ts`). Nothing in the web application enqueues yet; the request service takes an `AnalysisQueue` port and `createAnalysisQueue` (in `application/analysis-queue.ts`) adapts any `send` function to it.
 
 ### 10.1 Enqueue
 
-The Server Action (after `requireUser()`, an ownership check and rate limits) inserts a `pending` row, then enqueues a pg-boss job. The payload contains only `{ analysisId, userId }`. No text, no profile data. The job uses a singleton key equal to the analysis id so a duplicate enqueue is ignored. If enqueueing fails, the row is marked `failed` with `enqueue_failed` immediately, so the user sees a failure and can retry instead of waiting forever.
+The request service inserts a `pending` row, then enqueues. The payload is `{ analysisId, userId }` (strict schema; extra fields are rejected before sending), no text, no profile data. The queue `job-analysis.extract` uses the `short` policy and the job's `singletonKey` is the analysis id, so a repeated send while the first job is still waiting is a no-op (pg-boss returns no id; that is treated as success). If sending fails, the row is marked `failed` with `enqueue_failed` at once.
 
 ### 10.2 Worker handler (idempotent)
 
-1. Load the row by `(analysisId, userId)`. If it is not found, or already `completed`, return without doing anything.
-2. Claim it: `UPDATE ... SET status = 'processing', attempts = attempts + 1, started_at = now() WHERE id = ... AND user_id = ... AND status IN ('pending', 'processing')`. No row updated means another delivery owns it; return.
-3. Read the job through the `job-intake` public API. If it was deleted, mark the analysis `failed` with `job_missing`.
-4. Compute `description_hash`; call the gateway; validate; ground; normalize.
-5. Save the result and set `completed`, or on error decide: retryable errors rethrow so the queue retries; permanent errors (`too_long`) mark `failed` without a retry; on the final attempt a retryable error also marks `failed` with its code. "Final attempt" is decided from the row's own `attempts` counter and the configured maximum, not from queue internals, so the database and the queue cannot disagree. A stale delivery for a row that is already `failed` or `completed` cannot claim it (step 2 only claims `pending` and `processing` rows).
+`createAnalysisProcessor(...).process(payload)` in `application/process-analysis.ts`:
 
-Running the same delivery twice produces the same final state: step 1 and step 2 make the handler safe to repeat.
+1. Validate the payload (strict). Invalid: dropped, not retried.
+2. Load the row by `(analysisId, userId)`. Missing or foreign: skipped. `completed` or `failed`: skipped.
+3. Claim: `UPDATE ... SET status = 'processing', attempts = attempts + 1 ... WHERE id AND user_id AND (status = 'pending' OR (status = 'processing' AND updated_at < reclaimBefore))`. A run another delivery is working on right now is **not** claimable, so a duplicate delivery cannot call the model twice or use up attempts. `reclaimBefore` is now minus the model timeout plus 10 seconds, so the delivery that follows a dead worker is accepted. No row: skipped.
+4. Read the job through `createJobTextReader` (`src/features/job-intake/reader.ts`, owner-scoped). Deleted, malformed id or not the owner's: `failed` with `job_missing`; the model is not called. (An existing job with no usable text is `empty_input`, a different cause.)
+5. Call the extraction port with the job description **only**. The processor has no access to candidate data.
+6. Validate the result against `groundedRequirementsSchema` and save with `complete` (conditional on `processing`).
+7. On an error code: permanent (`too_long`, `empty_input`) marks `failed` at once. Retryable (`provider_unavailable`, `model_unavailable`, `timeout`, `invalid_output`) with attempts left calls `release` (`processing -> pending`, only for the attempt that holds the run) and returns `retry`; the worker then throws so the queue redelivers. On the last attempt (decided from the row's `attempts`, not from the queue) the run is marked `failed` with the code.
 
-### 10.3 Retry policy (proposed values, finalized with the queue implementation)
+An unexpected exception (for example a database error) is rethrown: the run is left as it is, the queue retries, and stale recovery ends it if the retries run out. Running the same delivery twice produces the same final state; `complete` and `fail` are conditional, so a late or duplicate delivery cannot move a run backwards or overwrite a result.
 
-Three attempts in total (a retry limit of 2), exponential backoff starting at 30 seconds, and a per-attempt expiry slightly above `LLM_TIMEOUT_MS`. A `processing` row whose queue job has expired is eligible to be claimed again; the claim query allows `processing` for that reason. The retry limit and delays are queue options; verify the exact option names against the installed pg-boss version.
+### 10.3 Retry policy and stale recovery
+
+Values live in `domain/processing-policy.ts`. Three attempts in total (queue `retryLimit` 2), `retryBackoff` on with a 30 second base and 300 second cap, and a per-attempt queue expiry of `LLM_TIMEOUT_MS` plus 30 seconds. `ensureQueue` applies the settings on every start.
+
+`createStaleRecovery(...).recover()` runs when the worker starts and then every minute (one pass at a time). It reads at most 50 stale runs, oldest first, and handles each through owner-scoped calls:
+
+- `pending` and unchanged for 6 minutes: send to the queue again (deduped by the singleton key; a double delivery is harmless because of the claim).
+- `pending` and unchanged for 30 minutes: `failed` with `enqueue_failed`, so the user sees it and can retry.
+- `processing` and idle longer than one attempt plus the longest backoff (`staleProcessingSeconds`), attempts left: send again.
+- `processing` and idle that long with every attempt used: `failed` with `retries_exhausted`.
+
+`failIfStale` re-checks the age inside its `UPDATE`, so a run claimed or finished after it was listed is left alone. Several workers may run recovery at once.
+
+### 10.3a Failure codes
+
+| Code                                                                     | Meaning                                                                                         | User may retry |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | -------------- |
+| `provider_unavailable`, `model_unavailable`, `timeout`, `invalid_output` | The cause of the **last** attempt; kept when retries run out                                    | Yes            |
+| `retries_exhausted`                                                      | Every attempt was used with no recorded cause (worker stopped answering, over-limit redelivery) | Yes            |
+| `enqueue_failed`                                                         | The queue never accepted, or never ran, the job                                                 | Yes            |
+| `too_long`                                                               | The description is over the input limit                                                         | No             |
+| `job_missing`                                                            | The job was deleted or is not the owner's                                                       | No             |
+| `empty_input`                                                            | The job exists but its description has no usable text                                           | No             |
+
+Nothing is saved on any failure: no partial or invalid output reaches `requirements`.
 
 ### 10.4 Provider failures
 
@@ -382,7 +410,7 @@ A provider outage or timeout never produces a fabricated or partial analysis. Th
 
 ### 10.5 Running the worker
 
-A separate long-running process (planned `pnpm worker`). Because feature code imports `server-only`, the worker must run with the `react-server` condition (verified: `tsx --conditions=react-server` loads `server-only`; plain `tsx` throws). It must stop gracefully on SIGTERM. Local development needs the web server and the worker; Playwright and CI start the worker too, with `LLM_PROVIDER=demo`.
+A separate long-running process: `pnpm worker` (`tsx --conditions=react-server --env-file-if-exists=.env src/worker/index.ts`). The first start installs pg-boss's own `pgboss` schema in the database named by `DATABASE_URL`, so do not start it against a database that should not get it. Because feature code imports `server-only`, the worker must run with the `react-server` condition (verified: `tsx --conditions=react-server` loads `server-only`; plain `tsx` throws). It must stop gracefully on SIGTERM. Local development needs the web server and the worker; Playwright and CI start the worker too, with `LLM_PROVIDER=demo`.
 
 ## 11. UI states (planned; job detail page "Match" section)
 

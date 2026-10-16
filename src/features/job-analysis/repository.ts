@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { ACTIVE_STATUSES, type AnalysisProvider, type FailureCode } from "./domain/analysis-state";
 import type { GroundedRequirements } from "./domain/requirements";
@@ -18,6 +18,14 @@ export type CompletedResult = {
   model: string | null;
   requirements: GroundedRequirements;
   droppedUngrounded: number;
+};
+
+/** What the recovery pass needs to decide about a run that stopped changing. */
+export type StaleRun = {
+  id: string;
+  userId: string;
+  status: "pending" | "processing";
+  attempts: number;
 };
 
 /**
@@ -43,8 +51,23 @@ export interface AnalysisRepository {
     userId: string,
     jobId: string,
   ): Promise<{ latest: AnalysisRecord | null; latestCompleted: AnalysisRecord | null }>;
-  /** pending or processing -> processing; counts the attempt. Null when it is not claimable. */
-  claim(userId: string, analysisId: string): Promise<AnalysisRecord | null>;
+  /**
+   * Starts an attempt: pending -> processing, or processing -> processing when the run has not
+   * changed since `reclaimBefore` (the worker that held it is gone). Counts the attempt. A run
+   * another delivery is working on right now is not claimable, so a duplicate delivery cannot
+   * run the model twice or use up attempts. Null when it is not claimable.
+   */
+  claim(
+    userId: string,
+    analysisId: string,
+    options: { reclaimBefore: Date },
+  ): Promise<AnalysisRecord | null>;
+  /**
+   * processing -> pending after a retryable failure, so the queue's next delivery can claim it.
+   * Only the attempt that holds the run (`attempts` equals `attempt`) can release it, so a
+   * superseded delivery cannot disturb the attempt that replaced it. Null otherwise.
+   */
+  release(userId: string, analysisId: string, attempt: number): Promise<AnalysisRecord | null>;
   /** processing -> completed. Null from any other state, so a stale worker cannot overwrite. */
   complete(
     userId: string,
@@ -53,6 +76,27 @@ export interface AnalysisRepository {
   ): Promise<AnalysisRecord | null>;
   /** pending or processing -> failed. Null from any other state. */
   fail(userId: string, analysisId: string, code: FailureCode): Promise<AnalysisRecord | null>;
+  /**
+   * Worker-only recovery. Not reachable from user-facing code: it lists runs of every user, so
+   * it returns ids only and is bounded by `limit`. The rows are then handled one at a time
+   * through owner-scoped calls. `pending` rows unchanged since `pendingBefore` and `processing`
+   * rows unchanged since `processingBefore`, oldest first.
+   */
+  listStale(cutoffs: {
+    pendingBefore: Date;
+    processingBefore: Date;
+    limit: number;
+  }): Promise<StaleRun[]>;
+  /**
+   * Like `fail`, but only if the run still has not changed since `unchangedSince`, so a run
+   * that was claimed or finished after it was listed is left alone.
+   */
+  failIfStale(
+    userId: string,
+    analysisId: string,
+    code: FailureCode,
+    unchangedSince: Date,
+  ): Promise<AnalysisRecord | null>;
 }
 
 /** Runs in the last 24 hours that count against the daily limit. */
@@ -129,7 +173,7 @@ export function createAnalysisRepository(db: PostgresJsDatabase): AnalysisReposi
       return { latest, latestCompleted: latestCompleted ?? null };
     },
 
-    async claim(userId, analysisId) {
+    async claim(userId, analysisId, { reclaimBefore }) {
       const [row] = await db
         .update(jobAnalysis)
         .set({
@@ -142,7 +186,26 @@ export function createAnalysisRepository(db: PostgresJsDatabase): AnalysisReposi
           and(
             eq(jobAnalysis.id, analysisId),
             eq(jobAnalysis.userId, userId),
-            inArray(jobAnalysis.status, [...ACTIVE_STATUSES]),
+            or(
+              eq(jobAnalysis.status, "pending"),
+              and(eq(jobAnalysis.status, "processing"), lt(jobAnalysis.updatedAt, reclaimBefore)),
+            ),
+          ),
+        )
+        .returning();
+      return row ?? null;
+    },
+
+    async release(userId, analysisId, attempt) {
+      const [row] = await db
+        .update(jobAnalysis)
+        .set({ status: "pending", updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(jobAnalysis.id, analysisId),
+            eq(jobAnalysis.userId, userId),
+            eq(jobAnalysis.status, "processing"),
+            eq(jobAnalysis.attempts, attempt),
           ),
         )
         .returning();
@@ -183,6 +246,42 @@ export function createAnalysisRepository(db: PostgresJsDatabase): AnalysisReposi
             eq(jobAnalysis.id, analysisId),
             eq(jobAnalysis.userId, userId),
             inArray(jobAnalysis.status, [...ACTIVE_STATUSES]),
+          ),
+        )
+        .returning();
+      return row ?? null;
+    },
+
+    async listStale({ pendingBefore, processingBefore, limit }) {
+      const rows = await db
+        .select({
+          id: jobAnalysis.id,
+          userId: jobAnalysis.userId,
+          status: jobAnalysis.status,
+          attempts: jobAnalysis.attempts,
+        })
+        .from(jobAnalysis)
+        .where(
+          or(
+            and(eq(jobAnalysis.status, "pending"), lt(jobAnalysis.updatedAt, pendingBefore)),
+            and(eq(jobAnalysis.status, "processing"), lt(jobAnalysis.updatedAt, processingBefore)),
+          ),
+        )
+        .orderBy(asc(jobAnalysis.updatedAt), asc(jobAnalysis.id))
+        .limit(limit);
+      return rows.map((row) => ({ ...row, status: row.status as StaleRun["status"] }));
+    },
+
+    async failIfStale(userId, analysisId, code, unchangedSince) {
+      const [row] = await db
+        .update(jobAnalysis)
+        .set({ status: "failed", failureCode: code, updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(jobAnalysis.id, analysisId),
+            eq(jobAnalysis.userId, userId),
+            inArray(jobAnalysis.status, [...ACTIVE_STATUSES]),
+            lt(jobAnalysis.updatedAt, unchangedSince),
           ),
         )
         .returning();

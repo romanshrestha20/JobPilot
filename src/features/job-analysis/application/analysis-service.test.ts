@@ -64,8 +64,11 @@ function setup(overrides: { repository?: Partial<AnalysisRepository> } = {}) {
     findForUser: vi.fn(async () => null),
     latestForJob: vi.fn(async () => ({ latest: null, latestCompleted: null })),
     claim: vi.fn(async () => null),
+    release: vi.fn(async () => null),
     complete: vi.fn(async () => null),
     fail: vi.fn(async () => null),
+    listStale: vi.fn(async () => []),
+    failIfStale: vi.fn(async () => null),
     ...overrides.repository,
   };
   // The fake job reader knows one job, owned by alice, like the real one scoped by user id.
@@ -271,10 +274,11 @@ describe("getMyAnalysisView", () => {
       "timeout",
       "invalid_output",
       "enqueue_failed",
+      "retries_exhausted",
     ]) {
       expect(await view(code), code).toMatchObject({ status: "failed", canRetry: true });
     }
-    for (const code of ["too_long", "job_missing"]) {
+    for (const code of ["too_long", "job_missing", "empty_input"]) {
       expect(await view(code), code).toMatchObject({ status: "failed", canRetry: false });
     }
   });

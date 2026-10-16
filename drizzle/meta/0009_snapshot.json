@@ -1,0 +1,946 @@
+{
+  "id": "72aa7028-a1d0-4036-8ac4-1d08a426a559",
+  "prevId": "56aa0a71-8862-4ead-a480-7108b240b661",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.account": {
+      "name": "account",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "access_token_expires_at": {
+          "name": "access_token_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "refresh_token_expires_at": {
+          "name": "refresh_token_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "account_user_id_user_id_fk": {
+          "name": "account_user_id_user_id_fk",
+          "tableFrom": "account",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.session": {
+      "name": "session",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "session_user_id_user_id_fk": {
+          "name": "session_user_id_user_id_fk",
+          "tableFrom": "session",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "session_token_unique": {
+          "name": "session_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user": {
+      "name": "user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_email_unique": {
+          "name": "user_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.verification": {
+      "name": "verification",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.candidate_profile": {
+      "name": "candidate_profile",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "headline": {
+          "name": "headline",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "years_of_experience": {
+          "name": "years_of_experience",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "languages": {
+          "name": "languages",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "work_modes": {
+          "name": "work_modes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "candidate_profile_user_id_user_id_fk": {
+          "name": "candidate_profile_user_id_user_id_fk",
+          "tableFrom": "candidate_profile",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "candidate_profile_user_id_unique": {
+          "name": "candidate_profile_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "candidate_profile_years_of_experience_range": {
+          "name": "candidate_profile_years_of_experience_range",
+          "value": "\"candidate_profile\".\"years_of_experience\" IS NULL OR \"candidate_profile\".\"years_of_experience\" BETWEEN 0 AND 60"
+        },
+        "candidate_profile_work_modes_allowed": {
+          "name": "candidate_profile_work_modes_allowed",
+          "value": "\"candidate_profile\".\"work_modes\" <@ ARRAY['remote', 'hybrid', 'onsite']::text[]"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.candidate_skill": {
+      "name": "candidate_skill",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "skill_key": {
+          "name": "skill_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "level": {
+          "name": "level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "years_of_experience": {
+          "name": "years_of_experience",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "candidate_skill_user_id_user_id_fk": {
+          "name": "candidate_skill_user_id_user_id_fk",
+          "tableFrom": "candidate_skill",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "candidate_skill_user_id_skill_key_unique": {
+          "name": "candidate_skill_user_id_skill_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "skill_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "candidate_skill_skill_key_valid": {
+          "name": "candidate_skill_skill_key_valid",
+          "value": "char_length(\"candidate_skill\".\"skill_key\") BETWEEN 1 AND 80 AND \"candidate_skill\".\"skill_key\" = btrim(\"candidate_skill\".\"skill_key\")"
+        },
+        "candidate_skill_display_name_valid": {
+          "name": "candidate_skill_display_name_valid",
+          "value": "char_length(\"candidate_skill\".\"display_name\") BETWEEN 1 AND 80 AND \"candidate_skill\".\"display_name\" = btrim(\"candidate_skill\".\"display_name\")"
+        },
+        "candidate_skill_level_allowed": {
+          "name": "candidate_skill_level_allowed",
+          "value": "\"candidate_skill\".\"level\" IS NULL OR \"candidate_skill\".\"level\" IN ('beginner', 'intermediate', 'advanced', 'expert')"
+        },
+        "candidate_skill_years_range": {
+          "name": "candidate_skill_years_range",
+          "value": "\"candidate_skill\".\"years_of_experience\" IS NULL OR \"candidate_skill\".\"years_of_experience\" BETWEEN 0 AND 60"
+        },
+        "candidate_skill_evidence_valid": {
+          "name": "candidate_skill_evidence_valid",
+          "value": "\"candidate_skill\".\"evidence\" IS NULL OR (char_length(\"candidate_skill\".\"evidence\") BETWEEN 1 AND 500 AND btrim(\"candidate_skill\".\"evidence\") <> '')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.job_analysis": {
+      "name": "job_analysis",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "description_hash": {
+          "name": "description_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requirements": {
+          "name": "requirements",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dropped_ungrounded": {
+          "name": "dropped_ungrounded",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "failure_code": {
+          "name": "failure_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "queued_at": {
+          "name": "queued_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "job_analysis_one_active_per_job": {
+          "name": "job_analysis_one_active_per_job",
+          "columns": [
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"job_analysis\".\"status\" IN ('pending', 'processing')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "job_analysis_user_id_job_id_created_at_idx": {
+          "name": "job_analysis_user_id_job_id_created_at_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "job_analysis_user_id_created_at_idx": {
+          "name": "job_analysis_user_id_created_at_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "job_analysis_user_id_user_id_fk": {
+          "name": "job_analysis_user_id_user_id_fk",
+          "tableFrom": "job_analysis",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "job_analysis_job_id_user_id_fk": {
+          "name": "job_analysis_job_id_user_id_fk",
+          "tableFrom": "job_analysis",
+          "tableTo": "job_posting",
+          "columnsFrom": [
+            "job_id",
+            "user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "job_analysis_status_allowed": {
+          "name": "job_analysis_status_allowed",
+          "value": "\"job_analysis\".\"status\" IN ('pending', 'processing', 'completed', 'failed')"
+        },
+        "job_analysis_failure_code_allowed": {
+          "name": "job_analysis_failure_code_allowed",
+          "value": "\"job_analysis\".\"failure_code\" IS NULL OR \"job_analysis\".\"failure_code\" IN ('provider_unavailable', 'model_unavailable', 'timeout', 'invalid_output', 'too_long', 'enqueue_failed', 'job_missing', 'empty_input', 'retries_exhausted')"
+        },
+        "job_analysis_provider_allowed": {
+          "name": "job_analysis_provider_allowed",
+          "value": "\"job_analysis\".\"provider\" IS NULL OR \"job_analysis\".\"provider\" IN ('ollama', 'demo')"
+        },
+        "job_analysis_failure_code_iff_failed": {
+          "name": "job_analysis_failure_code_iff_failed",
+          "value": "(\"job_analysis\".\"status\" = 'failed') = (\"job_analysis\".\"failure_code\" IS NOT NULL)"
+        },
+        "job_analysis_requirements_iff_completed": {
+          "name": "job_analysis_requirements_iff_completed",
+          "value": "(\"job_analysis\".\"status\" = 'completed') = (\"job_analysis\".\"requirements\" IS NOT NULL)"
+        },
+        "job_analysis_completed_has_provenance": {
+          "name": "job_analysis_completed_has_provenance",
+          "value": "\"job_analysis\".\"status\" <> 'completed' OR (\"job_analysis\".\"description_hash\" IS NOT NULL AND \"job_analysis\".\"prompt_version\" IS NOT NULL AND \"job_analysis\".\"provider\" IS NOT NULL AND \"job_analysis\".\"completed_at\" IS NOT NULL)"
+        },
+        "job_analysis_description_hash_format": {
+          "name": "job_analysis_description_hash_format",
+          "value": "\"job_analysis\".\"description_hash\" IS NULL OR \"job_analysis\".\"description_hash\" ~ '^[0-9a-f]{64}$'"
+        },
+        "job_analysis_requirements_object": {
+          "name": "job_analysis_requirements_object",
+          "value": "\"job_analysis\".\"requirements\" IS NULL OR (jsonb_typeof(\"job_analysis\".\"requirements\") = 'object' AND pg_column_size(\"job_analysis\".\"requirements\") <= 100000)"
+        },
+        "job_analysis_text_lengths": {
+          "name": "job_analysis_text_lengths",
+          "value": "(\"job_analysis\".\"prompt_version\" IS NULL OR char_length(\"job_analysis\".\"prompt_version\") BETWEEN 1 AND 50) AND (\"job_analysis\".\"model\" IS NULL OR char_length(\"job_analysis\".\"model\") BETWEEN 1 AND 200)"
+        },
+        "job_analysis_counters_non_negative": {
+          "name": "job_analysis_counters_non_negative",
+          "value": "\"job_analysis\".\"attempts\" >= 0 AND \"job_analysis\".\"dropped_ungrounded\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.job_posting": {
+      "name": "job_posting",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "company": {
+          "name": "company",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'saved'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "job_posting_user_id_created_at_idx": {
+          "name": "job_posting_user_id_created_at_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "job_posting_user_id_user_id_fk": {
+          "name": "job_posting_user_id_user_id_fk",
+          "tableFrom": "job_posting",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "job_posting_id_user_id_unique": {
+          "name": "job_posting_id_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "job_posting_title_length": {
+          "name": "job_posting_title_length",
+          "value": "\"job_posting\".\"title\" ~ '[^[:space:]]' AND char_length(\"job_posting\".\"title\") <= 200"
+        },
+        "job_posting_company_length": {
+          "name": "job_posting_company_length",
+          "value": "\"job_posting\".\"company\" ~ '[^[:space:]]' AND char_length(\"job_posting\".\"company\") <= 200"
+        },
+        "job_posting_description_length": {
+          "name": "job_posting_description_length",
+          "value": "\"job_posting\".\"description\" ~ '[^[:space:]]' AND char_length(\"job_posting\".\"description\") <= 20000"
+        },
+        "job_posting_location_length": {
+          "name": "job_posting_location_length",
+          "value": "\"job_posting\".\"location\" IS NULL OR (\"job_posting\".\"location\" ~ '[^[:space:]]' AND char_length(\"job_posting\".\"location\") <= 200)"
+        },
+        "job_posting_status_allowed": {
+          "name": "job_posting_status_allowed",
+          "value": "\"job_posting\".\"status\" IN ('saved', 'applied', 'interviewing', 'offered', 'rejected', 'withdrawn')"
+        },
+        "job_posting_source_url_http": {
+          "name": "job_posting_source_url_http",
+          "value": "\"job_posting\".\"source_url\" IS NULL OR (char_length(\"job_posting\".\"source_url\") <= 2048 AND \"job_posting\".\"source_url\" ~* '^https?://')"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

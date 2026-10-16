@@ -1,0 +1,2 @@
+ALTER TABLE "job_analysis" DROP CONSTRAINT "job_analysis_failure_code_allowed";--> statement-breakpoint
+ALTER TABLE "job_analysis" ADD CONSTRAINT "job_analysis_failure_code_allowed" CHECK ("job_analysis"."failure_code" IS NULL OR "job_analysis"."failure_code" IN ('provider_unavailable', 'model_unavailable', 'timeout', 'invalid_output', 'too_long', 'enqueue_failed', 'job_missing', 'empty_input', 'retries_exhausted'));

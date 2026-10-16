@@ -64,6 +64,13 @@
       "when": 1792100769497,
       "tag": "0008_job_analysis",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792184679312,
+      "tag": "0009_job_analysis_failure_codes",
+      "breakpoints": true
     }
   ]
 }

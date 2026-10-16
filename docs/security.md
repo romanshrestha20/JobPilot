@@ -173,6 +173,8 @@ Tested: origin validation and rate limits through the real Better Auth handler w
 
 Tested (unit, no model or database): the AI gateway, Ollama provider with mocked `fetch`, demo provider and factory, environment rules, logger redaction, requirements schema, prompt construction, grounding, extraction with injection fixtures, and the import boundaries (see "Phase 2A" above). Not tested against a real model.
 
-Not implemented, therefore not tested: persistence, ownership checks and rate limits for analyses, the queue and worker, and the analysis UI.
+Tested (database and queue, `*_test` database only, fake model): owner-scoped analysis persistence, the per-user quota and one-active-run rule under concurrent requests, conditional state transitions, the worker's ownership checks (a forged payload user id reaches nothing), idempotent processing under duplicate and simultaneous deliveries, retries and fail-closed behaviour when the model is unavailable or returns unusable output, and stale-run recovery, including with real pg-boss. The worker's use case has no access to candidate data and the model port receives only the job description (unit and import-boundary tests).
+
+Not implemented, therefore not tested: the request entry point (Server Action or route) and the analysis UI. Not tested: a real model, a worker killed mid-attempt, and more than one worker process.
 
 Not tested: HTTPS and `__Secure-` cookie behavior in a real deployment, any proxy or multi-instance setup, and the sign-in page's final navigation in a browser.

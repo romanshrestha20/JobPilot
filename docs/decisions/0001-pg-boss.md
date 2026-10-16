@@ -1,6 +1,6 @@
 # ADR 0001: Use pg-boss for background work
 
-- **Status:** Proposed. Accepted when the queue implementation phase starts and the dependency is added.
+- **Status:** Accepted. The dependency (pg-boss 12.38) and the worker were added in Phase 2B step 5. The retry values are in `src/features/job-analysis/domain/processing-policy.ts`; the web process does not enqueue yet.
 - **Date:** 2026-10-15
 - **Deciders:** project owner
 - **Related:** `docs/ai-architecture.md` (sections 8 and 10), `docs/security.md` (AI section), `AGENTS.md` ("long-running work goes to pg-boss and must be idempotent with retry limits").
