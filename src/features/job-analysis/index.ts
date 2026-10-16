@@ -25,7 +25,14 @@ export type { GroundedRequirements, GroundedSkill } from "./domain/requirements"
 export { createAnalysisRepository } from "./repository";
 export type { AnalysisRepository } from "./repository";
 export { createAnalysisService } from "./application/analysis-service";
-export type { AnalysisQueue, JobReader } from "./application/analysis-service";
+export type {
+  AnalysisDto,
+  AnalysisQueue,
+  JobAnalysisView,
+  JobReader,
+  RequestAnalysisResult,
+} from "./application/analysis-service";
+export type { AnalysisStatus, FailureCode } from "./domain/analysis-state";
 export {
   ANALYSIS_QUEUE_NAME,
   analysisPayloadSchema,

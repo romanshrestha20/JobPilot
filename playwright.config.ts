@@ -47,24 +47,42 @@ export default defineConfig({
         ]
       : []),
   ],
-  webServer: {
-    // Production build in a separate directory (see next.config.ts) so it never clobbers `next dev`.
-    command: `pnpm exec next build && pnpm exec next start -p ${PORT}`,
-    url: `${BASE_URL}/sign-in`,
-    // Never reuse a server already on this port: it could be pointed at a different database.
-    reuseExistingServer: false,
-    timeout: 240_000,
-    env: {
-      NEXT_DIST_DIR: ".next-e2e",
-      NEXT_TELEMETRY_DISABLED: "1",
-      DATABASE_URL: testDatabaseUrl,
-      BETTER_AUTH_URL: BASE_URL,
-      BETTER_AUTH_SECRET:
-        process.env.BETTER_AUTH_SECRET || "e2e-only-secret-not-used-outside-tests-0123456789",
-      // The server runs as a production build, where `LLM_PROVIDER=demo` is rejected. No test
-      // here calls a model, so this placeholder is never contacted.
-      LLM_PROVIDER: "ollama",
-      LLM_MODEL: "e2e-placeholder",
+  webServer: [
+    {
+      // Production build in a separate directory (see next.config.ts) so it never clobbers `next dev`.
+      command: `pnpm exec next build && pnpm exec next start -p ${PORT}`,
+      url: `${BASE_URL}/sign-in`,
+      // Never reuse a server already on this port: it could be pointed at a different database.
+      reuseExistingServer: false,
+      timeout: 240_000,
+      env: {
+        NEXT_DIST_DIR: ".next-e2e",
+        NEXT_TELEMETRY_DISABLED: "1",
+        DATABASE_URL: testDatabaseUrl,
+        BETTER_AUTH_URL: BASE_URL,
+        BETTER_AUTH_SECRET:
+          process.env.BETTER_AUTH_SECRET || "e2e-only-secret-not-used-outside-tests-0123456789",
+        // The server runs as a production build, where `LLM_PROVIDER=demo` is rejected. No test
+        // here calls a model, so this placeholder is never contacted.
+        LLM_PROVIDER: "ollama",
+        LLM_MODEL: "e2e-placeholder",
+      },
     },
-  },
+    {
+      // The background worker, against the same guarded test database. It is not a production
+      // build, so it may use the keyword-based demo provider instead of a model. It installs
+      // pg-boss's own `pgboss` schema in the test database only.
+      command: "pnpm worker",
+      wait: { stdout: /worker\.started/ },
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: {
+        DATABASE_URL: testDatabaseUrl,
+        BETTER_AUTH_URL: BASE_URL,
+        BETTER_AUTH_SECRET:
+          process.env.BETTER_AUTH_SECRET || "e2e-only-secret-not-used-outside-tests-0123456789",
+        LLM_PROVIDER: "demo",
+      },
+    },
+  ],
 });

@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DeleteJobForm, JobStatusBadge, JobStatusForm, getMyJob } from "@/features/job-intake";
 import { requireUser } from "@/features/identity/server";
 import { linkClass } from "@/components/ui/link";
+import { AnalysisPanel } from "./_analysis/analysis-panel";
 
 export const metadata = { title: "Job · JobPilot" };
 
@@ -100,6 +101,13 @@ async function JobContent({ params, searchParams }: Props) {
             {/* Untrusted text: rendered as plain text (React escapes it), never as HTML. */}
             <p className="whitespace-pre-wrap wrap-anywhere text-body">{job.description}</p>
           </section>
+        </CardContent>
+      </Card>
+      <Card className="mt-6">
+        <CardContent>
+          <Suspense fallback={<LoadingState label="Loading analysis…" />}>
+            <AnalysisPanel userId={user.id} jobId={job.id} />
+          </Suspense>
         </CardContent>
       </Card>
       <div className="mt-6">

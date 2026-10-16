@@ -412,7 +412,9 @@ A provider outage or timeout never produces a fabricated or partial analysis. Th
 
 A separate long-running process: `pnpm worker` (`tsx --conditions=react-server --env-file-if-exists=.env src/worker/index.ts`). The first start installs pg-boss's own `pgboss` schema in the database named by `DATABASE_URL`, so do not start it against a database that should not get it. Because feature code imports `server-only`, the worker must run with the `react-server` condition (verified: `tsx --conditions=react-server` loads `server-only`; plain `tsx` throws). It must stop gracefully on SIGTERM. Local development needs the web server and the worker; Playwright and CI start the worker too, with `LLM_PROVIDER=demo`.
 
-## 11. UI states (planned; job detail page "Match" section)
+## 11. UI states (job detail page)
+
+Step 6 implements the **requirements** part: the "Job requirements" section of the job page (`src/app/(app)/jobs/[id]/_analysis/`, in the app layer because `job-analysis` may not import `next`, `react` or other features). Scoring against the candidate profile is not built, so the score rows below stay planned. The Server Action `requestAnalysisAction` authenticates with `requireUser`, takes only `jobId` from the form, and calls the owner-scoped request service. The page re-renders from the server through `router.refresh()`: every 2 seconds for 30 seconds, then every 5 seconds, paused while the tab is hidden, and stopped after 10 minutes or when the run ends. No candidate data is read by this code (enforced by `_analysis/boundary.test.ts`). `too_long` and `empty_input` do not offer a plain Retry; they link to the editor and offer "Analyse again" because editing the job can fix them.
 
 | State                               | Shown                                                                                                                | Actions                                                        |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |

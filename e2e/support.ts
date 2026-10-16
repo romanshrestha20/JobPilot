@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { candidateSkill } from "@/features/candidate-profile/schema";
+import { jobAnalysis } from "@/features/job-analysis/schema";
 import { jobPosting } from "@/features/job-intake/schema";
 import { user as userTable } from "@/lib/schema";
 import { connectTestDatabase } from "@/test/integration-db";
@@ -135,6 +136,36 @@ export async function storedSkills(email: string) {
       .from(candidateSkill)
       .innerJoin(userTable, eq(candidateSkill.userId, userTable.id))
       .where(eq(userTable.email, email));
+  } finally {
+    await close();
+  }
+}
+
+/**
+ * Inserts one analysis run in a state the demo worker cannot produce on demand (running, or
+ * failed with a given code) for the user's job, into the guarded test database.
+ */
+export async function seedAnalysis(
+  jobId: string,
+  run:
+    | { status: "processing"; attempts: number }
+    | { status: "failed"; failureCode: string; attempts?: number },
+) {
+  const { db, close } = await connectTestDatabase();
+  try {
+    const [job] = await db
+      .select({ userId: jobPosting.userId })
+      .from(jobPosting)
+      .where(eq(jobPosting.id, jobId));
+    if (!job) throw new Error("seedAnalysis: job not found");
+    await db.insert(jobAnalysis).values({
+      userId: job.userId,
+      jobId,
+      status: run.status,
+      attempts: run.attempts ?? 1,
+      failureCode: run.status === "failed" ? run.failureCode : null,
+      startedAt: run.status === "processing" ? new Date() : null,
+    });
   } finally {
     await close();
   }

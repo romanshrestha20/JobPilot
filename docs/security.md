@@ -175,6 +175,6 @@ Tested (unit, no model or database): the AI gateway, Ollama provider with mocked
 
 Tested (database and queue, `*_test` database only, fake model): owner-scoped analysis persistence, the per-user quota and one-active-run rule under concurrent requests, conditional state transitions, the worker's ownership checks (a forged payload user id reaches nothing), idempotent processing under duplicate and simultaneous deliveries, retries and fail-closed behaviour when the model is unavailable or returns unusable output, and stale-run recovery, including with real pg-boss. The worker's use case has no access to candidate data and the model port receives only the job description (unit and import-boundary tests).
 
-Not implemented, therefore not tested: the request entry point (Server Action or route) and the analysis UI. Not tested: a real model, a worker killed mid-attempt, and more than one worker process.
+The request entry point (`requestAnalysisAction`) and the requirements UI are implemented and tested (unit tests for the action, `e2e/analysis.spec.ts`); scoring against the profile is not. Not tested: a real model, a worker killed mid-attempt, and more than one worker process.
 
 Not tested: HTTPS and `__Secure-` cookie behavior in a real deployment, any proxy or multi-instance setup, and the sign-in page's final navigation in a browser.
