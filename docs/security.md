@@ -90,7 +90,7 @@ Job descriptions are written by third parties and are untrusted. They may contai
 
 ### Privacy and data minimization
 
-- The model receives the **job description (and title and company)** only. The candidate profile, skills, location, CV text and any document are never sent in this feature. Matching runs locally in application code.
+- The model receives the **job description text** only (the extraction prompt takes no title, company or other field). The candidate profile, skills, location, CV text and any document are never sent in this feature. Matching runs locally in application code.
 - With `LLM_PROVIDER=ollama` inference runs on the operator's own Ollama host; no data leaves that machine unless the operator points `OLLAMA_URL` elsewhere, which then becomes a deployment and privacy decision. Hosted providers are not supported.
 - Any later feature that sends profile data or documents to a model (an AI explanation, CV tailoring) needs its own review, user-visible disclosure and this document updated first.
 - Analysis rows are owner-scoped, deleted with the job or the user (`ON DELETE CASCADE`), and contain no data the user did not already provide, apart from the extraction derived from it.
@@ -134,6 +134,10 @@ Never logged: job text, titles or companies from user data, model prompts or res
 
 The match score measures how much of the requirements **stated in a job description** the user's own profile covers, using fixed, versioned rules, and it reports how much information it could use (coverage). It is not a prediction of hiring, interview or offer probability, and the product must not present it as one. Missing information on either side is shown as missing, not scored as a gap.
 
+### Match path: candidate data stays local
+
+`src/features/job-matching/` reads the signed-in user's profile and skills only after the job's ownership and a completed analysis are confirmed, and compares them in-process with `scoreMatch`. It has no access to the AI gateway, the extraction use case or the queue (its composition binds a queue that throws), and nothing is stored. Tests: a byte-identical model request (URL, method, headers, body) for the same job text with no profile, with a full profile and for another user, with unique profile markers absent from every request; import-boundary tests for the match path, the worker, the queue and the AI layer; an integration test that another user's skills never change a result and that foreign, missing and malformed ids are one `not_found`.
+
 ### Phase 2A: implemented controls and their limits
 
 Implemented and unit-tested (`src/lib/ai/`, `src/features/job-analysis/`, `src/lib/log.ts`, `src/lib/env-schema.ts`):
@@ -175,6 +179,6 @@ Tested (unit, no model or database): the AI gateway, Ollama provider with mocked
 
 Tested (database and queue, `*_test` database only, fake model): owner-scoped analysis persistence, the per-user quota and one-active-run rule under concurrent requests, conditional state transitions, the worker's ownership checks (a forged payload user id reaches nothing), idempotent processing under duplicate and simultaneous deliveries, retries and fail-closed behaviour when the model is unavailable or returns unusable output, and stale-run recovery, including with real pg-boss. The worker's use case has no access to candidate data and the model port receives only the job description (unit and import-boundary tests).
 
-The request entry point (`requestAnalysisAction`) and the requirements UI are implemented and tested (unit tests for the action, `e2e/analysis.spec.ts`); scoring against the profile is not. Not tested: a real model, a worker killed mid-attempt, and more than one worker process.
+The request entry point (`requestAnalysisAction`) and the requirements UI are implemented and tested (unit tests for the action, `e2e/analysis.spec.ts`); scoring against the profile (`match-v1`, computed on read) is implemented and tested the same way (`e2e/match.spec.ts`, `job-matching` unit and integration tests). Not tested: a real model, a worker killed mid-attempt, and more than one worker process.
 
 Not tested: HTTPS and `__Secure-` cookie behavior in a real deployment, any proxy or multi-instance setup, and the sign-in page's final navigation in a browser.

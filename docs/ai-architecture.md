@@ -8,17 +8,17 @@ Related documents: `docs/architecture.md` (system and module boundaries), `docs/
 
 ## 1. What exists and what does not
 
-| Area                                                                                              | State today                                                                                                                                 | Evidence                                                                 |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Configuration names `OLLAMA_URL`, `LLM_PROVIDER` (`ollama` or `demo`), `LLM_MODEL`, `EMBED_MODEL` | Validated and read by `src/lib/ai` (Phase 2A); `EMBED_MODEL` is still unused                                                                | `src/lib/env.ts`; no other file references them                          |
-| AI gateway, `ollama` and `demo` providers, requirements extraction                                | Implemented (Phase 2A); nothing calls it from the application yet                                                                           | `src/lib/ai/`, `src/features/job-analysis/`                              |
-| Queue, worker, pg-boss                                                                            | Implemented (Phase 2B step 5): `src/lib/queue.ts`, `src/worker/`, `pnpm worker`; not yet called by any Server Action or UI                  | `pg-boss` 12.38 in `package.json`; tests in `src/worker/`                |
-| Candidate skills                                                                                  | Implemented: name, optional level, years and evidence, at most 50 per user, one per lowercase key; no alias dictionary                      | `candidate_skill` in `src/features/candidate-profile/`, migration `0006` |
-| Persistence, UI, scoring                                                                          | Not implemented (extraction only)                                                                                                           | no `job_analysis` table, no analysis UI, no scoring code                 |
-| pgvector                                                                                          | Extension enabled only; no vector columns                                                                                                   | `drizzle/0000_enable-pgvector.sql`                                       |
-| Local Ollama                                                                                      | Reachable (v0.40.3 when checked 2026-10-15), but only the embedding model `bge-m3` is pulled; no chat model. No real inference has been run | checked with `GET /api/tags` during the audit                            |
-| Candidate profile                                                                                 | Implemented: headline, summary, location (free text), years of experience, languages, work modes                                            | `src/features/candidate-profile/`                                        |
-| Job postings                                                                                      | Implemented: title, company, location (free text), source URL, description up to 20,000 characters, application status                      | `src/features/job-intake/`                                               |
+| Area                                                                                              | State today                                                                                                                                 | Evidence                                                                                         |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Configuration names `OLLAMA_URL`, `LLM_PROVIDER` (`ollama` or `demo`), `LLM_MODEL`, `EMBED_MODEL` | Validated and read by `src/lib/ai` (Phase 2A); `EMBED_MODEL` is still unused                                                                | `src/lib/env.ts`; no other file references them                                                  |
+| AI gateway, `ollama` and `demo` providers, requirements extraction                                | Implemented (Phase 2A); nothing calls it from the application yet                                                                           | `src/lib/ai/`, `src/features/job-analysis/`                                                      |
+| Queue, worker, pg-boss                                                                            | Implemented (Phase 2B step 5): `src/lib/queue.ts`, `src/worker/`, `pnpm worker`; not yet called by any Server Action or UI                  | `pg-boss` 12.38 in `package.json`; tests in `src/worker/`                                        |
+| Candidate skills                                                                                  | Implemented: name, optional level, years and evidence, at most 50 per user, one per lowercase key; no alias dictionary                      | `candidate_skill` in `src/features/candidate-profile/`, migration `0006`                         |
+| Persistence, UI, scoring                                                                          | Implemented: `job_analysis`, the requirements UI and `match-v1` scoring computed on read (Phase 2B steps 4 to 7); scoring is not persisted  | `src/features/job-analysis/`, `src/features/job-matching/`, `src/app/(app)/jobs/[id]/_analysis/` |
+| pgvector                                                                                          | Extension enabled only; no vector columns                                                                                                   | `drizzle/0000_enable-pgvector.sql`                                                               |
+| Local Ollama                                                                                      | Reachable (v0.40.3 when checked 2026-10-15), but only the embedding model `bge-m3` is pulled; no chat model. No real inference has been run | checked with `GET /api/tags` during the audit                                                    |
+| Candidate profile                                                                                 | Implemented: headline, summary, location (free text), years of experience, languages, work modes                                            | `src/features/candidate-profile/`                                                                |
+| Job postings                                                                                      | Implemented: title, company, location (free text), source URL, description up to 20,000 characters, application status                      | `src/features/job-intake/`                                                                       |
 
 The first version does **not** use embeddings or semantic search. pgvector stays unused.
 
@@ -340,6 +340,8 @@ Every function takes the owner's `user_id`; there is no lookup by analysis id al
 
 ## 9. Module layout (planned, following `docs/architecture.md` section 5)
 
+**As built.** `job-analysis` may not import `next`, `react`, other features, or candidate data (boundary tests). So the UI, the Server Action and the web composition live in the app layer (`src/app/(app)/jobs/[id]/_analysis/`), and the use case that joins an analysis with the signed-in user's profile is a separate module, `src/features/job-matching/` (`application/match-service.ts` takes ports and the pure scorer as arguments; `index.ts` is the server-only composition and binds the analysis service to a queue that refuses to send). The tree below is the original plan.
+
 ```text
 src/lib/ai/                       gateway, providers (ollama, demo), prompts, error types
 src/lib/queue.ts                  thin pg-boss wrapper: enqueue and start
@@ -414,7 +416,7 @@ A separate long-running process: `pnpm worker` (`tsx --conditions=react-server -
 
 ## 11. UI states (job detail page)
 
-Step 6 implements the **requirements** part: the "Job requirements" section of the job page (`src/app/(app)/jobs/[id]/_analysis/`, in the app layer because `job-analysis` may not import `next`, `react` or other features). Scoring against the candidate profile is not built, so the score rows below stay planned. The Server Action `requestAnalysisAction` authenticates with `requireUser`, takes only `jobId` from the form, and calls the owner-scoped request service. The page re-renders from the server through `router.refresh()`: every 2 seconds for 30 seconds, then every 5 seconds, paused while the tab is hidden, and stopped after 10 minutes or when the run ends. No candidate data is read by this code (enforced by `_analysis/boundary.test.ts`). `too_long` and `empty_input` do not offer a plain Retry; they link to the editor and offer "Analyse again" because editing the job can fix them.
+Step 6 implements the **requirements** part: the "Job requirements" section of the job page (`src/app/(app)/jobs/[id]/_analysis/`, in the app layer because `job-analysis` may not import `next`, `react` or other features). The **match** part is also implemented (`match-panel.tsx`, `match-presentation.ts`, "Match with your profile" card). The Server Action `requestAnalysisAction` authenticates with `requireUser`, takes only `jobId` from the form, and calls the owner-scoped request service. The page re-renders from the server through `router.refresh()`: every 2 seconds for 30 seconds, then every 5 seconds, paused while the tab is hidden, and stopped after 10 minutes or when the run ends. No candidate data is read by this code (enforced by `_analysis/boundary.test.ts`). `too_long` and `empty_input` do not offer a plain Retry; they link to the editor and offer "Analyse again" because editing the job can fix them.
 
 | State                               | Shown                                                                                                                | Actions                                                        |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
@@ -426,6 +428,8 @@ Step 6 implements the **requirements** part: the "Job requirements" section of t
 | Out of date                         | Existing result marked "Out of date: the job description changed"                                                    | Re-analyse                                                     |
 | Failed                              | Plain reason (service unavailable, took too long, response could not be used, description too long)                  | Retry (not offered for permanent causes)                       |
 | Demo extraction                     | A visible "Demo extraction (no AI model)" label on any result from the `demo` provider                               | same as above                                                  |
+
+**Match card (implemented).** `getMyMatch(user, jobId)` in `job-matching` reads the owner-scoped analysis, then (only if a completed analysis with valid requirements exists) the same user's profile and skills, and calls `scoreMatch`. Results: `not_found` (missing, malformed and foreign ids alike), `no_completed_analysis`, or `ready` with the `match-v1` breakdown. An absent profile row counts as an empty profile and skills are used on their own; no number is invented when coverage is below 50 (insufficient information) and none is shown when the job states nothing (no requirements). The newest completed analysis is scored even when the description changed since; the card then says it is out of date. The page shows the score and label, coverage, the scoring and skill-list versions, the disclaimer, a labelled table of the five parts (weight, result, or "Not assessed" with the reason), and per skill: name, state in words, the reason, the user's own entry, and the quote from the job text. Unmapped requirements are listed by name as not compared and not lowering the score. When profile information would let more of the job be assessed, the card lists it and links to `/profile`.
 
 States use the existing `Alert`, `Badge`, `Card`, `Skeleton`, `Spinner` and `Button` primitives and semantic tokens. Colour never carries meaning alone: every state has text. All text from the job or the model is rendered as plain text.
 
@@ -443,9 +447,9 @@ Unit tests for deterministic rules must never call a live model (`AGENTS.md`).
 ## 13. Open decisions
 
 1. ~~Which chat model to use locally.~~ Decided: a Qwen instruct model (recommended `qwen2.5:7b-instruct`, section 4.3). Still open: confirmation on real hardware; none is installed yet.
-2. Compute the score on read (proposed) or persist a `match_result` row for history.
+2. ~~Compute the score on read (proposed) or persist a `match_result` row for history.~~ Decided and implemented: computed on read, never persisted (`src/features/job-matching/`). Still open: persisting history if score changes over time need to be shown.
 3. Accept `pg-boss` and a separate worker process (proposed; see the ADR).
-4. Whether profile data may ever be sent to a model (proposed: no, in this MVP).
+4. Whether profile data may ever be sent to a model (proposed: no, in this MVP). The match path is enforced local-only by tests: a byte-identical model request with and without a profile, and import-boundary tests.
 5. ~~Whether `LLM_PROVIDER=demo` is allowed in production.~~ Decided: rejected, no override.
 6. ~~Module name.~~ Decided: `job-analysis` for extraction; matching and scoring come later. Still open: whether `job_requirement` and `match_result` are folded into one `job_analysis` table as proposed.
 7. ~~Starter dictionary.~~ Decided: small, explicit and versioned (`skills-v1`). Still open: who maintains it and when it moves to tables.
@@ -455,11 +459,11 @@ Unit tests for deterministic rules must never call a live model (`AGENTS.md`).
 
 0. Documentation and decisions (this document, the ADR, the security section, reconciled architecture snapshot).
 1. Candidate skills (migration, UI, tests). **Done.**
-2. Domain: dictionary, requirements schema, grounding, scoring, with exhaustive unit tests. **Partly done in 2A** (starter dictionary, requirements schema, grounding); scoring is pending.
+2. Domain: dictionary, requirements schema, grounding, scoring, with exhaustive unit tests. **Done** (`match-v1`).
 3. AI gateway, `demo` and `ollama` providers, environment changes, mocked tests, manual evaluation script. **Done (Phase 2A)**, except validation against a real model.
 4. Persistence: `job_analysis` and the `job_posting` unique constraint (migrations), repository, state machine, request and retry with rate limits.
 5. Queue and worker: pg-boss dependency, `src/lib/queue.ts`, `src/worker/`, `processAnalysis`.
-6. UI: Match section, polling, breakdown, all states.
+6. UI: requirements section, polling, failure and retry states. **Done.** The match card (score, breakdown, insufficient-information and no-requirements states) is also **done**.
 7. End-to-end tests with a worker process, CI changes, documentation updates.
 8. Real-model evaluation and prompt tuning.
 
