@@ -1,45 +1,56 @@
 import Link from "next/link";
 import { Alert } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { linkClass } from "@/components/ui/link";
 import { getMyMatch } from "@/features/job-matching";
-import { type MatchView, type SkillRow, presentMatch } from "./match-presentation";
+import { type MatchView, type SkillGroup, presentMatch } from "./match-presentation";
 
-function SkillRows({ title, rows }: { title: string; rows: SkillRow[] }) {
-  if (rows.length === 0) return null;
+const CHIP_TONES: Record<SkillGroup["state"], NonNullable<BadgeProps["tone"]>> = {
+  matched: "success",
+  listed: "neutral",
+  absent: "tag",
+  no_profile_skills: "tag",
+  unmapped: "tag",
+};
+
+/** One list of skills, grouped by state so each state and its explanation appears once. */
+function SkillGroups({ title, groups }: { title: string; groups: SkillGroup[] }) {
+  if (groups.length === 0) return null;
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <h3 className="text-label font-medium">{title}</h3>
-      <ul className="flex flex-col gap-3">
-        {rows.map((row) => (
-          <li key={row.key} className="flex min-w-0 flex-col gap-1">
-            <span className="flex flex-wrap items-center gap-2">
-              <span className="font-medium wrap-anywhere">{row.name}</span>
-              <Badge tone={row.stateLabel === "Matched" ? "success" : "neutral"}>
-                {row.stateLabel}
-              </Badge>
-            </span>
-            <span className="text-body-sm wrap-anywhere">{row.reason}</span>
-            {row.yourEntry ? (
-              <span className="text-body-sm text-muted-foreground wrap-anywhere">
-                Your entry: {row.yourEntry}
-              </span>
-            ) : null}
-            <q className="text-body-sm text-muted-foreground wrap-anywhere">{row.quote}</q>
-          </li>
-        ))}
-      </ul>
+    <div className="flex min-w-0 flex-col gap-3">
+      <h3 className="text-h3">{title}</h3>
+      {groups.map((group) => (
+        <div key={group.state} className="flex min-w-0 flex-col gap-2">
+          <p className="text-body">
+            <span className="font-medium">{group.label}</span>
+            <span className="text-muted-foreground"> · {group.reason}</span>
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {group.skills.map((skill) => (
+              <li key={skill.key} className="min-w-0 max-w-full">
+                <Badge tone={CHIP_TONES[group.state]} className="max-w-full py-1 wrap-anywhere">
+                  {skill.name}
+                  {skill.detail ? (
+                    <span className="font-normal opacity-80"> ({skill.detail})</span>
+                  ) : null}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }
 
-function Breakdown({ view }: { view: MatchView }) {
+function PartsTable({ view, open }: { view: MatchView; open: boolean }) {
   return (
-    <>
-      <table className="w-full text-body-sm">
+    <details open={open} className="rounded-md border border-border px-4 py-3">
+      <summary className="cursor-pointer text-body font-medium">How each part contributed</summary>
+      <table className="mt-3 w-full text-body">
         <caption className="sr-only">How each part contributed to the match</caption>
         <thead>
-          <tr className="text-left text-muted-foreground">
+          <tr className="text-left text-body-sm text-muted-foreground">
             <th scope="col" className="py-1 pr-3 font-medium">
               Part
             </th>
@@ -61,16 +72,16 @@ function Breakdown({ view }: { view: MatchView }) {
               <td className="py-2">
                 {row.resultText}
                 {row.note ? (
-                  <span className="block text-muted-foreground wrap-anywhere">{row.note}</span>
+                  <span className="block text-body-sm text-muted-foreground wrap-anywhere">
+                    {row.note}
+                  </span>
                 ) : null}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <SkillRows title="Required skills" rows={view.required} />
-      <SkillRows title="Preferred skills" rows={view.preferred} />
-    </>
+    </details>
   );
 }
 
@@ -84,13 +95,13 @@ export async function MatchPanel({ userId, jobId }: { userId: string; jobId: str
   if (!result.ok) return null;
 
   return (
-    <div role="region" aria-labelledby="match-heading" className="flex min-w-0 flex-col gap-3">
-      <h2 id="match-heading" className="text-h3">
+    <div role="region" aria-labelledby="match-heading" className="flex min-w-0 flex-col gap-4">
+      <h2 id="match-heading" className="text-h2">
         Match with your profile
       </h2>
 
       {result.state === "no_completed_analysis" ? (
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           Analyse this job to see how your profile matches its requirements.
         </p>
       ) : (
@@ -108,6 +119,7 @@ export function MatchBody({
 }) {
   const view = presentMatch(result.breakdown);
   const scored = view.status === "scored";
+  const needsProfile = view.missingProfile.length > 0;
 
   return (
     <>
@@ -118,8 +130,9 @@ export function MatchBody({
         </Alert>
       ) : null}
 
-      <div className="flex flex-col gap-1">
-        <p className="text-h2">
+      {/* Summary: the number (or why there is none), its label, and how much it rests on. */}
+      <div className="flex flex-col gap-2 rounded-md bg-muted px-4 py-4">
+        <p className="text-h1">
           {scored ? (
             <span className="sr-only">Match score{result.stale ? " (out of date)" : ""}: </span>
           ) : null}
@@ -134,48 +147,25 @@ export function MatchBody({
         </p>
       </div>
 
-      {scored ? <p className="text-body-sm">{view.disclaimer}</p> : null}
-
-      {view.status === "insufficient_information" ? (
-        <div className="flex flex-col gap-2">
-          {view.missingProfile.length > 0 ? (
-            <>
-              <p className="text-body-sm">Adding this to your profile would help:</p>
-              <ul className="list-disc pl-5 text-body-sm">
-                {view.missingProfile.map((text) => (
-                  <li key={text}>{text}</li>
-                ))}
-              </ul>
-              <p className="text-body-sm">
-                <Link href="/profile" className={linkClass}>
-                  Go to your profile
-                </Link>
-              </p>
-            </>
-          ) : (
-            <p className="text-body-sm">
-              This job description does not give enough comparable detail to score.
-            </p>
-          )}
-          {view.jobNotStated.length > 0 ? (
-            <ul className="list-disc pl-5 text-body-sm text-muted-foreground">
-              {view.jobNotStated.map((text) => (
-                <li key={text}>{text}</li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-
       {view.status === "no_requirements" ? (
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           The analysis found no skills, experience, languages, work mode or locations to compare.
         </p>
       ) : null}
 
-      {scored && view.missingProfile.length > 0 ? (
+      {view.status === "insufficient_information" && !needsProfile ? (
+        <p className="text-body">
+          This job description does not give enough comparable detail to score.
+        </p>
+      ) : null}
+
+      {needsProfile ? (
         <Alert variant="info">
-          <p>Adding this to your profile would let more of the job be assessed:</p>
+          <p>
+            {scored
+              ? "Adding this to your profile would let more of the job be assessed:"
+              : "Adding this to your profile would help:"}
+          </p>
           <ul className="list-disc pl-5">
             {view.missingProfile.map((text) => (
               <li key={text}>{text}</li>
@@ -189,24 +179,26 @@ export function MatchBody({
         </Alert>
       ) : null}
 
-      {view.unmappedNames.length > 0 ? (
-        <Alert variant="info">
-          <p>
-            {view.unmappedNames.length === 1
-              ? "1 requirement is"
-              : `${view.unmappedNames.length} requirements are`}{" "}
-            not in the skill list, so {view.unmappedNames.length === 1 ? "it was" : "they were"} not
-            compared and did not lower the score: {view.unmappedNames.join(", ")}. Review{" "}
-            {view.unmappedNames.length === 1 ? "it" : "them"} yourself.
-          </p>
-        </Alert>
+      {view.jobNotStated.length > 0 && !scored ? (
+        <p className="text-body-sm text-muted-foreground">
+          The job {view.jobNotStated.map(withoutSubject).join("; ")}.
+        </p>
       ) : null}
 
-      {view.status !== "no_requirements" ? <Breakdown view={view} /> : null}
-
-      {!scored && view.status === "insufficient_information" ? (
-        <p className="text-body-sm text-muted-foreground">{view.disclaimer}</p>
+      {view.status !== "no_requirements" ? (
+        <>
+          <PartsTable view={view} open={!scored} />
+          <SkillGroups title="Required skills" groups={view.required} />
+          <SkillGroups title="Preferred skills" groups={view.preferred} />
+        </>
       ) : null}
+
+      <p className="text-body-sm text-muted-foreground">{view.disclaimer}</p>
     </>
   );
+}
+
+/** "The job does not state a work mode" -> "does not state a work mode", for one joined sentence. */
+function withoutSubject(text: string): string {
+  return text.replace(/^The job /, "");
 }

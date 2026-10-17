@@ -19,15 +19,19 @@ export const SKILL_STATE_LABELS: Record<SkillState, string> = {
   no_profile_skills: "Needs profile skills",
 };
 
-export type SkillRow = {
+export type SkillChip = {
   key: string;
   name: string;
-  stateLabel: string;
+  /** What the user's own entry says, e.g. "Advanced · 4 years"; null when there is nothing to add. */
+  detail: string | null;
+};
+
+/** Skills of one list that share a state: the state and its explanation are shown once. */
+export type SkillGroup = {
+  state: SkillState;
+  label: string;
   reason: string;
-  /** Text copied from the job description (untrusted; rendered as plain text). */
-  quote: string;
-  /** What the user's own entry says, e.g. "Advanced · 4 years"; null when not listed. */
-  yourEntry: string | null;
+  skills: SkillChip[];
 };
 
 export type ComponentRow = {
@@ -50,8 +54,8 @@ export type MatchView = {
   versionText: string;
   disclaimer: string;
   components: ComponentRow[];
-  required: SkillRow[];
-  preferred: SkillRow[];
+  required: SkillGroup[];
+  preferred: SkillGroup[];
   /** What to add to the profile; each item is a prompt, the page links them to the profile. */
   missingProfile: string[];
   jobNotStated: string[];
@@ -59,26 +63,50 @@ export type MatchView = {
   unmappedNames: string[];
 };
 
-function yourEntry(candidate: MatchBreakdown["skills"][number]["candidate"]): string | null {
+/** Order of the groups: genuine results first, then what could not be assessed. */
+const STATE_ORDER: SkillState[] = ["matched", "listed", "absent", "no_profile_skills", "unmapped"];
+
+/** One shared explanation per group (the scorer's reason, with the unmapped case made explicit). */
+const GROUP_REASONS: Record<SkillState, string> = {
+  ...SKILL_STATE_REASONS,
+  // The scorer's reason repeats the label ("Not in your profile"), so the group says what it means.
+  absent: "These count as gaps. Add them to your profile if you have them.",
+  unmapped:
+    "Not in the skill list, so not compared and not counted against you. Review these yourself.",
+};
+
+function detailOf(candidate: MatchBreakdown["skills"][number]["candidate"]): string | null {
   if (!candidate) return null;
   const parts = [
-    candidate.level ?? null,
+    candidate.level ? candidate.level.charAt(0).toUpperCase() + candidate.level.slice(1) : null,
     candidate.yearsOfExperience === null
       ? null
       : `${candidate.yearsOfExperience} year${candidate.yearsOfExperience === 1 ? "" : "s"}`,
   ].filter((part): part is string => part !== null);
-  return parts.length > 0 ? parts.join(" · ") : "Listed without level or years";
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-function toRow(skill: MatchBreakdown["skills"][number]): SkillRow {
-  return {
-    key: `${skill.list}:${skill.key}`,
-    name: skill.name,
-    stateLabel: SKILL_STATE_LABELS[skill.state],
-    reason: SKILL_STATE_REASONS[skill.state],
-    quote: skill.quote,
-    yourEntry: yourEntry(skill.candidate),
-  };
+function groupSkills(
+  skills: MatchBreakdown["skills"],
+  list: MatchBreakdown["skills"][number]["list"],
+): SkillGroup[] {
+  const ofList = skills.filter((skill) => skill.list === list);
+  return STATE_ORDER.flatMap((state) => {
+    const members = ofList.filter((skill) => skill.state === state);
+    if (members.length === 0) return [];
+    return [
+      {
+        state,
+        label: SKILL_STATE_LABELS[state],
+        reason: GROUP_REASONS[state],
+        skills: members.map((skill) => ({
+          key: `${skill.list}:${skill.key}`,
+          name: skill.name,
+          detail: detailOf(skill.candidate),
+        })),
+      },
+    ];
+  });
 }
 
 /** Turns a `match-v1` breakdown into display text. No scoring happens here. */
@@ -105,8 +133,8 @@ export function presentMatch(breakdown: MatchBreakdown): MatchView {
       resultText: component.assessable ? `${Math.round(component.score * 100)}%` : "Not assessed",
       note: component.assessable ? null : NOT_ASSESSABLE_TEXT[component.reason],
     })),
-    required: breakdown.skills.filter((s) => s.list === "required").map(toRow),
-    preferred: breakdown.skills.filter((s) => s.list === "preferred").map(toRow),
+    required: groupSkills(breakdown.skills, "required"),
+    preferred: groupSkills(breakdown.skills, "preferred"),
     missingProfile: breakdown.missingProfileData.map((item) => MISSING_PROFILE_TEXT[item]),
     jobNotStated: breakdown.jobNotStated.map((item) => JOB_NOT_STATED_TEXT[item]),
     unmappedNames: breakdown.skills.filter((s) => !s.mapped).map((s) => s.name),

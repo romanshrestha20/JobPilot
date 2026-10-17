@@ -55,10 +55,6 @@ const html = (reqs: GroundedRequirements, stale = false, p = profile) =>
       },
     }),
   );
-const item = (markup: string, name: string) =>
-  [...markup.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)]
-    .map((m) => m[1])
-    .find((x) => x.includes(`>${name}<`));
 
 describe("stale analysis", () => {
   it("marks the score itself, the label row and the banner, and says the score describes older text", () => {
@@ -89,19 +85,46 @@ describe("unmapped and skill states in the markup", () => {
   const markup = html(
     requirements({ requiredSkills: [skill("TypeScript"), skill("Zorbo", false)] }),
   );
+  /** The group (heading line plus chips) that contains a skill name. */
+  const groupOf = (name: string) =>
+    markup.split('<div class="flex min-w-0 flex-col gap-2">').find((g) => g.includes(`>${name}`));
 
   it("never shows an unmapped requirement as matched", () => {
-    const zorbo = item(markup, "Zorbo");
-    expect(zorbo).toBeDefined();
-    expect(zorbo).toContain("Not compared");
-    expect(zorbo).not.toContain("Matched");
-    expect(zorbo).not.toContain("Listed");
-    expect(markup).toMatch(/not in the skill list[\s\S]*did not lower the score: Zorbo/);
+    const group = groupOf("Zorbo");
+    expect(group).toBeDefined();
+    expect(group).toContain("Not compared");
+    expect(group).toContain("not counted against you");
+    expect(group).not.toContain("Matched");
+    expect(group).not.toContain("Listed");
+    expect(group).not.toContain("TypeScript");
   });
 
-  it("shows the other states as words with their reasons", () => {
-    expect(item(markup, "TypeScript")).toContain("Matched");
-    expect(item(markup, "Docker")).toContain("Not in your profile");
+  it("shows genuine states as words, once per group", () => {
+    expect(groupOf("TypeScript")).toContain("Matched");
+    expect(groupOf("TypeScript")).toContain("(Advanced · 4 years)");
+    expect(groupOf("Docker")).toContain("Not in your profile");
+    // The explanation of a state appears once, however many skills share it.
+    const many = html(
+      requirements({
+        requiredSkills: [skill("Git"), skill("Docker"), skill("Kubernetes")],
+        preferredSkills: [],
+      }),
+      false,
+      {
+        ...profile,
+        skills: [{ name: "TypeScript", level: null, yearsOfExperience: null, evidence: null }],
+      },
+    );
+    expect(many.split("Not in your profile").length - 1).toBe(1);
+  });
+
+  it("keeps Not assessed and Needs profile skills distinct from matched or missing", () => {
+    const empty = html(requirements(), false, { ...profile, skills: [] });
+    expect(empty).toContain("Needs profile skills");
+    expect(empty).toContain("Not assessed");
+    expect(empty).not.toContain("Matched");
+    expect(empty).not.toContain("Not in your profile");
+    expect(empty).not.toMatch(/out of 100/);
   });
 
   it("uses a heading order without skipped levels and labels its table", () => {
@@ -111,10 +134,10 @@ describe("unmapped and skill states in the markup", () => {
     expect(markup).toContain('scope="row"');
   });
 
-  it("states version, coverage and the disclaimer", () => {
+  it("states version, coverage and the disclaimer once", () => {
     expect(markup).toContain("Scoring match-v1, skill list skills-v1");
     expect(markup).toMatch(/\d+% of the scoring weight could be assessed/);
-    expect(markup).toContain("not a prediction");
+    expect(markup.split("not a prediction").length - 1).toBe(1);
   });
 });
 

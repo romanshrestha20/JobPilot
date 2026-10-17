@@ -77,28 +77,23 @@ test.describe("match with your profile", () => {
       match.getByText(/not a prediction of whether you will be invited or hired/),
     ).toBeVisible();
 
-    // The per-part table is a real, labelled table with row headers.
+    // The per-part table sits in a disclosure (open by default only when there is no score).
+    await match.locator("summary", { hasText: "How each part contributed" }).click();
     const table = match.getByRole("table", { name: "How each part contributed to the match" });
     await expect(table.getByRole("rowheader", { name: "Required skills" })).toBeVisible();
     await expect(table.getByRole("columnheader", { name: "Weight" })).toBeVisible();
 
-    // Every skill has its state as words plus the reason.
-    const required = match.getByRole("heading", { name: "Required skills", level: 3 });
-    await expect(required).toBeVisible();
-    const items = match.getByRole("listitem");
-    await expect(items.filter({ hasText: "TypeScript" }).getByText("Matched")).toBeVisible();
-    await expect(
-      items.filter({ hasText: "TypeScript" }).getByText("Your entry: Advanced · 4 years"),
-    ).toBeVisible();
-    await expect(
-      items.filter({ hasText: "PostgreSQL" }).getByText("Listed", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      items.filter({ hasText: "PostgreSQL" }).getByText(/without level or evidence/),
-    ).toBeVisible();
-    await expect(
-      items.filter({ hasText: "Docker" }).getByText("Not in your profile").first(),
-    ).toBeVisible();
+    // Skills are grouped by state: each state (and its explanation) appears once, as words.
+    await expect(match.getByRole("heading", { name: "Required skills", level: 3 })).toBeVisible();
+    await expect(match.getByRole("heading", { name: "Preferred skills", level: 3 })).toBeVisible();
+    const requiredGroup = match.getByText("Matched", { exact: true });
+    await expect(requiredGroup).toHaveCount(1);
+    await expect(match.getByText("TypeScript (Advanced · 4 years)")).toBeVisible();
+    await expect(match.getByText("Listed", { exact: true })).toHaveCount(1);
+    await expect(match.getByText(/without level or evidence/)).toHaveCount(1);
+    await expect(match.getByText("PostgreSQL", { exact: true })).toBeVisible();
+    await expect(match.getByText("Not in your profile", { exact: true })).toHaveCount(1);
+    await expect(match.getByText("Docker", { exact: true })).toBeVisible();
     await expect(match.locator("[title]")).toHaveCount(0);
   });
 

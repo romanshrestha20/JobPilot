@@ -54,27 +54,28 @@ describe("presentMatch", () => {
     expect(view.disclaimer).toMatch(/not a prediction/);
   });
 
-  it("every skill state has visible words and a reason", () => {
+  it("groups skills by state: each state and its reason once, in a fixed order", () => {
     for (const state of SKILL_STATES) {
       expect(SKILL_STATE_LABELS[state], state).toMatch(/\S/);
     }
     const view = presentMatch(scoreMatch(base, profile));
-    const byName = Object.fromEntries(
-      [...view.required, ...view.preferred].map((r) => [r.name, r]),
-    );
-    expect(byName.TypeScript).toMatchObject({
-      stateLabel: "Matched",
-      yourEntry: "advanced · 4 years",
-    });
-    expect(byName.Kubernetes).toMatchObject({ stateLabel: "Not in your profile", yourEntry: null });
-    expect(byName.Docker).toMatchObject({
-      stateLabel: "Listed",
-      yourEntry: "Listed without level or years",
-    });
-    for (const row of [...view.required, ...view.preferred]) {
-      expect(row.reason).toMatch(/\S/);
-      expect(row.quote).toMatch(/^Need /);
+    // Required: TypeScript is matched (described), Kubernetes is absent.
+    expect(view.required.map((g) => [g.state, g.label, g.skills.map((x) => x.name)])).toEqual([
+      ["matched", "Matched", ["TypeScript"]],
+      ["absent", "Not in your profile", ["Kubernetes"]],
+    ]);
+    expect(view.preferred.map((g) => [g.state, g.skills.map((x) => x.name)])).toEqual([
+      ["listed", ["Docker"]],
+    ]);
+    // The user's own entry is a detail of a chip; nothing is repeated per skill.
+    expect(view.required[0].skills[0].detail).toBe("Advanced · 4 years");
+    expect(view.preferred[0].skills[0].detail).toBeNull();
+    for (const group of [...view.required, ...view.preferred]) {
+      expect(group.reason).toMatch(/\S/);
     }
+    // A reason appears once per group, not once per skill.
+    expect(view.required[1].reason).not.toBe(view.required[1].label);
+    expect(JSON.stringify(view).split(view.required[1].reason).length - 1).toBe(1);
   });
 
   it("an empty profile is the explicit insufficient-information state with what to add", () => {
@@ -126,9 +127,10 @@ describe("presentMatch", () => {
       ),
     );
     expect(view.unmappedNames).toEqual(["Zorbo"]);
-    expect(view.required.find((r) => r.name === "Zorbo")).toMatchObject({
-      stateLabel: "Not compared",
-    });
+    const group = view.required.find((g) => g.state === "unmapped");
+    expect(group).toMatchObject({ label: "Not compared" });
+    expect(group?.skills.map((x) => x.name)).toEqual(["Zorbo"]);
+    expect(group?.reason).toMatch(/not counted against you/);
   });
 
   it("only-unmapped skills give insufficient information with nothing to add, and says what the job lacks", () => {
