@@ -53,7 +53,12 @@ export function JobForm({ job }: JobFormProps) {
       </FormField>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <FormField id="location" label="Location (optional)" error={errors.location}>
+        <FormField
+          id="location"
+          label="Location (optional)"
+          hint="A place, such as a city or Remote. Put web addresses in the link field."
+          error={errors.location}
+        >
           {(control) => (
             <Input
               {...control}

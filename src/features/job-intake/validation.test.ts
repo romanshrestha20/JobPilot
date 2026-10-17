@@ -77,6 +77,35 @@ describe("jobInputSchema", () => {
     }
   });
 
+  it.each([
+    "Helsinki, Finlandhttp://localhost:3001/jobs/new",
+    "https://example.com/jobs/1",
+    "HTTP://EXAMPLE.COM",
+    "ftp://files.example.com",
+    "Helsinki www.example.com",
+    "www.example.com",
+  ])("rejects a web address in the location: %s", (location) => {
+    const result = parse({ location });
+    expect(result.success).toBe(false);
+    expect(firstError(result, "location")).toMatch(/place.*link field/i);
+  });
+
+  it.each([
+    "Helsinki, Finland",
+    "Remote (EU)",
+    "Zürich, CH",
+    "San Francisco, CA / hybrid",
+    "Düsseldorf: onsite",
+    "wwwood, Finland",
+  ])("accepts a place in the location: %s", (location) => {
+    expect(parse({ location })).toMatchObject({ success: true, data: { location } });
+  });
+
+  it("does not apply the web-address rule to other fields", () => {
+    expect(parse({ company: "https://example.com Ltd" }).success).toBe(true);
+    expect(parse({ sourceUrl: "https://example.com/jobs/1" }).success).toBe(true);
+  });
+
   it("rejects NUL and other control characters in the description, allows tabs and newlines", () => {
     expect(parse({ description: "a\u0000b" }).success).toBe(false);
     expect(parse({ description: "a\u0007b" }).success).toBe(false);

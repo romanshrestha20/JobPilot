@@ -74,6 +74,33 @@ test.describe("job intake", () => {
     );
   });
 
+  test("a web address pasted into the location is refused and the form keeps what was typed", async ({
+    page,
+    registeredUser,
+    origin,
+  }) => {
+    await signInViaApi(page, registeredUser, origin);
+    await page.goto("/jobs/new");
+    await expect(
+      page.getByText("A place, such as a city or Remote. Put web addresses in the link field."),
+    ).toBeVisible();
+    await fillJob(page, {
+      title: "Engineer",
+      company: "Acme",
+      location: "Helsinki, Finlandhttp://localhost:3001/jobs/new",
+      description: "Kept text",
+    });
+    await page.getByRole("button", { name: "Save job" }).click();
+
+    await expect(page.getByText(/Location should be a place.*link field/)).toBeVisible();
+    await expect(page.getByLabel("Location (optional)")).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByLabel("Location (optional)")).toHaveValue(
+      "Helsinki, Finlandhttp://localhost:3001/jobs/new",
+    );
+    await expect(page.getByLabel("Job description")).toHaveValue("Kept text");
+    await expect(page).toHaveURL("/jobs/new");
+  });
+
   test("shows server-side validation errors and keeps what was typed", async ({
     page,
     registeredUser,

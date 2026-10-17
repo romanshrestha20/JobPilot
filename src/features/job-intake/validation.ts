@@ -22,12 +22,19 @@ const requiredLine = (label: string, max: number) =>
     .max(max, `${label} must be at most ${max} characters.`)
     .refine((value) => !CONTROL.test(value), `${label} must be a single line of plain text.`);
 
-const optionalLine = (label: string, max: number) =>
+// A web address is not a place. Catches a pasted link (with a scheme, or starting with www.).
+const WEB_ADDRESS = /(?:[a-z][a-z0-9+.-]*:\/\/|(?:^|\s)www\.)/i;
+
+const optionalLine = (label: string, max: number, options: { rejectWebAddress?: boolean } = {}) =>
   z
     .string()
     .trim()
     .max(max, `${label} must be at most ${max} characters.`)
     .refine((value) => !CONTROL.test(value), `${label} must be a single line of plain text.`)
+    .refine(
+      (value) => !options.rejectWebAddress || !WEB_ADDRESS.test(value),
+      `${label} should be a place such as "Helsinki" or "Remote". Put web addresses in the link field.`,
+    )
     .transform((value) => (value === "" ? null : value))
     .nullable()
     .optional()
@@ -79,7 +86,7 @@ const description = z
 export const jobInputSchema = z.strictObject({
   title: requiredLine("Title", JOB_LIMITS.title),
   company: requiredLine("Company", JOB_LIMITS.company),
-  location: optionalLine("Location", JOB_LIMITS.location),
+  location: optionalLine("Location", JOB_LIMITS.location, { rejectWebAddress: true }),
   sourceUrl: optionalHttpUrl,
   description,
 });
