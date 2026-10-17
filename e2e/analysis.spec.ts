@@ -43,6 +43,9 @@ test.describe("job analysis", () => {
     await expect(panel.getByText("TypeScript", { exact: true }).first()).toBeVisible();
     await expect(panel.getByText("PostgreSQL", { exact: true }).first()).toBeVisible();
     // The evidence quote is visible text, not a hover title.
+    const evidence = panel.locator("summary", { hasText: "Show where each skill appears" });
+    await expect(panel.locator("q").first()).toBeHidden(); // collapsed until asked for
+    await evidence.click();
     await expect(panel.locator("q").first()).toBeVisible();
     await expect(panel.locator("[title]")).toHaveCount(0);
     await expect(panel.getByRole("heading", { name: "Preferred skills" })).toBeVisible();

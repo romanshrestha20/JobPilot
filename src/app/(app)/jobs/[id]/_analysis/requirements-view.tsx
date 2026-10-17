@@ -2,33 +2,54 @@ import { Badge } from "@/components/ui/badge";
 import type { AnalysisDto } from "@/features/job-analysis";
 
 type Requirements = NonNullable<AnalysisDto["requirements"]>;
+type Skills = Requirements["requiredSkills"];
 
 const WORK_MODE_LABELS = { remote: "Remote", hybrid: "Hybrid", onsite: "On-site" } as const;
 
-function SkillList({ title, skills }: { title: string; skills: Requirements["requiredSkills"] }) {
+function SkillBadges({ title, skills }: { title: string; skills: Skills }) {
   if (skills.length === 0) return null;
   return (
-    <section className="flex min-w-0 flex-col gap-2">
-      <h4 className="text-label font-medium">{title}</h4>
-      <ul className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
+      <h3 className="text-h3">{title}</h3>
+      <ul className="flex flex-wrap gap-2">
         {skills.map((skill) => (
-          // The evidence is text copied from the job description, shown as visible text (not a
-          // hover title) so keyboard, touch and screen-reader users can check it. All of it is
-          // untrusted and rendered as plain text.
-          <li key={skill.key} className="flex min-w-0 flex-col gap-1">
-            <span className="flex flex-wrap items-center gap-2">
-              <Badge tone="tag" className="max-w-full wrap-anywhere">
-                {skill.name}
-              </Badge>
+          <li key={skill.key} className="min-w-0 max-w-full">
+            {/* Untrusted text from the job description: rendered as plain text. */}
+            <Badge tone="tag" className="max-w-full text-body wrap-anywhere">
+              {skill.name}
               {skill.mapped ? null : (
-                <span className="text-body-sm text-muted-foreground">not in skill list</span>
+                <span className="font-normal text-muted-foreground"> · not in skill list</span>
               )}
-            </span>
-            <q className="text-body-sm wrap-anywhere text-muted-foreground">{skill.quote}</q>
+            </Badge>
           </li>
         ))}
       </ul>
-    </section>
+    </div>
+  );
+}
+
+/**
+ * The evidence for each skill: the sentence of the job description it came from. A native
+ * disclosure, so it works by keyboard, by touch and with a screen reader, and keeps the skill
+ * list short. Everything inside is untrusted text and rendered as plain text.
+ */
+function Evidence({ required, preferred }: { required: Skills; preferred: Skills }) {
+  const all = [...required, ...preferred];
+  if (all.length === 0) return null;
+  return (
+    <details className="rounded-md border border-border px-4 py-3">
+      <summary className="cursor-pointer text-body font-medium">
+        Show where each skill appears in the description
+      </summary>
+      <ul className="mt-3 flex flex-col gap-3">
+        {all.map((skill, index) => (
+          <li key={`${skill.key}-${index}`} className="flex min-w-0 flex-col gap-1 text-body">
+            <span className="font-medium wrap-anywhere">{skill.name}</span>
+            <q className="text-muted-foreground wrap-anywhere">{skill.quote}</q>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -58,14 +79,14 @@ export function RequirementsView({ requirements }: { requirements: Requirements 
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {nothingFound ? (
-        <p className="text-body-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           No specific requirements were found in this description.
         </p>
       ) : null}
-      <SkillList title="Required skills" skills={requirements.requiredSkills} />
-      <SkillList title="Preferred skills" skills={requirements.preferredSkills} />
+      <SkillBadges title="Required skills" skills={requirements.requiredSkills} />
+      <SkillBadges title="Preferred skills" skills={requirements.preferredSkills} />
       {facts.length > 0 ? (
-        <dl className="grid gap-2 text-body-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-4">
+        <dl className="grid gap-2 text-body sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-4">
           {facts.map(([term, value]) => (
             <div key={term} className="contents">
               <dt className="text-muted-foreground">{term}</dt>
@@ -74,6 +95,7 @@ export function RequirementsView({ requirements }: { requirements: Requirements 
           ))}
         </dl>
       ) : null}
+      <Evidence required={requirements.requiredSkills} preferred={requirements.preferredSkills} />
       {requirements.droppedUngrounded > 0 ? (
         <p className="text-body-sm text-muted-foreground">
           {requirements.droppedUngrounded} item

@@ -16,7 +16,7 @@ function Progress({ analysis }: { analysis: AnalysisDto }) {
   const queued = analysis.status === "pending";
   const retrying = analysis.attempts > 1;
   return (
-    <div className="flex items-center gap-3 text-body-sm" role="status" aria-live="polite">
+    <div className="flex items-center gap-3 text-body" role="status" aria-live="polite">
       <Spinner label="" />
       <span>
         {queued
@@ -93,14 +93,14 @@ export async function AnalysisPanel({ userId, jobId }: { userId: string; jobId: 
   const active = latest?.status === "pending" || latest?.status === "processing";
 
   return (
-    <div role="region" aria-labelledby="analysis-heading" className="flex min-w-0 flex-col gap-3">
-      <h2 id="analysis-heading" className="text-h3">
+    <div role="region" aria-labelledby="analysis-heading" className="flex min-w-0 flex-col gap-4">
+      <h2 id="analysis-heading" className="text-h2">
         Job requirements
       </h2>
 
       {latest === null ? (
         <div className="flex flex-col gap-3">
-          <p className="text-body-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             Analyse this description to list the skills and conditions it asks for. Only the job
             text is sent to the AI, never your profile.
           </p>

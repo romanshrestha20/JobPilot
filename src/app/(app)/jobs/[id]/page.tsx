@@ -22,7 +22,7 @@ type Props = {
 
 export default function JobPage({ params, searchParams }: Props) {
   return (
-    <PageShell>
+    <PageShell width="wide">
       <Suspense fallback={<LoadingState label="Loading job…" />}>
         <JobContent params={params} searchParams={searchParams} />
       </Suspense>
@@ -51,73 +51,83 @@ async function JobContent({ params, searchParams }: Props) {
         }
       />
       {(saved === "1" || updated === "1") && (
-        <div className="mb-4">
+        <div className="mb-6">
           <Alert variant="success">{updated === "1" ? "Job updated." : "Job saved."}</Alert>
         </div>
       )}
-      <Card>
-        <CardContent className="flex flex-col gap-4">
-          <section aria-labelledby="status-heading" className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 id="status-heading" className="text-h3">
-                Application status
+      {/* One column up to xl; from xl the job sits beside its analysis and match. */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start">
+        <Card>
+          <CardContent className="flex flex-col gap-6">
+            <section aria-labelledby="status-heading" className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 id="status-heading" className="text-h2">
+                  Application status
+                </h2>
+                <JobStatusBadge status={job.status} />
+              </div>
+              <JobStatusForm jobId={job.id} status={job.status} />
+            </section>
+            <dl className="grid gap-2 text-body sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-4">
+              <dt className="text-muted-foreground">Saved</dt>
+              <dd>
+                {job.createdAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
+              </dd>
+              {job.updatedAt.getTime() - job.createdAt.getTime() > 1000 ? (
+                <>
+                  <dt className="text-muted-foreground">Updated</dt>
+                  <dd>
+                    {job.updatedAt.toLocaleString("en", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </dd>
+                </>
+              ) : null}
+              {job.sourceUrl ? (
+                <>
+                  <dt className="text-muted-foreground">Original posting</dt>
+                  <dd className="wrap-anywhere">
+                    <a
+                      href={job.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      className={linkClass}
+                    >
+                      {job.sourceUrl}
+                    </a>
+                  </dd>
+                </>
+              ) : null}
+            </dl>
+            <section aria-labelledby="description-heading" className="flex flex-col gap-3">
+              <h2 id="description-heading" className="text-h2">
+                Description
               </h2>
-              <JobStatusBadge status={job.status} />
-            </div>
-            <JobStatusForm jobId={job.id} status={job.status} />
-          </section>
-          <dl className="grid gap-2 text-body-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-4">
-            <dt className="text-muted-foreground">Saved</dt>
-            <dd>
-              {job.createdAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
-            </dd>
-            {job.updatedAt.getTime() - job.createdAt.getTime() > 1000 ? (
-              <>
-                <dt className="text-muted-foreground">Updated</dt>
-                <dd>
-                  {job.updatedAt.toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}
-                </dd>
-              </>
-            ) : null}
-            {job.sourceUrl ? (
-              <>
-                <dt className="text-muted-foreground">Original posting</dt>
-                <dd className="wrap-anywhere">
-                  <a
-                    href={job.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    className={linkClass}
-                  >
-                    {job.sourceUrl}
-                  </a>
-                </dd>
-              </>
-            ) : null}
-          </dl>
-          <section aria-labelledby="description-heading" className="flex flex-col gap-2">
-            <h2 id="description-heading" className="text-h3">
-              Description
-            </h2>
-            {/* Untrusted text: rendered as plain text (React escapes it), never as HTML. */}
-            <p className="whitespace-pre-wrap wrap-anywhere text-body">{job.description}</p>
-          </section>
-        </CardContent>
-      </Card>
-      <Card className="mt-6">
-        <CardContent>
-          <Suspense fallback={<LoadingState label="Loading analysis…" />}>
-            <AnalysisPanel userId={user.id} jobId={job.id} />
-          </Suspense>
-        </CardContent>
-      </Card>
-      <Card className="mt-6">
-        <CardContent>
-          <Suspense fallback={<LoadingState label="Loading match…" />}>
-            <MatchPanel userId={user.id} jobId={job.id} />
-          </Suspense>
-        </CardContent>
-      </Card>
+              {/* Untrusted text: rendered as plain text (React escapes it), never as HTML. */}
+              <p className="whitespace-pre-wrap wrap-anywhere text-body leading-7">
+                {job.description}
+              </p>
+            </section>
+          </CardContent>
+        </Card>
+        <div className="flex min-w-0 flex-col gap-6">
+          <Card>
+            <CardContent>
+              <Suspense fallback={<LoadingState label="Loading analysis…" />}>
+                <AnalysisPanel userId={user.id} jobId={job.id} />
+              </Suspense>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent>
+              <Suspense fallback={<LoadingState label="Loading match…" />}>
+                <MatchPanel userId={user.id} jobId={job.id} />
+              </Suspense>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
       <div className="mt-6">
         <DeleteJobForm jobId={job.id} />
       </div>

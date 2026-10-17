@@ -31,8 +31,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         Skip to main content
       </a>
 
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-6 border-r bg-card p-4 md:flex">
-        <Link href="/" className="px-3 text-h3 text-foreground">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col gap-6 border-r bg-card px-4 pb-4 md:flex">
+        {/* Same height and rule as the top bar, so the brand and the bar line up. */}
+        <Link
+          href="/"
+          className="-mx-4 flex h-14 shrink-0 items-center border-b px-7 text-h3 text-foreground"
+        >
           JobPilot
         </Link>
         <nav aria-label="Main">
